@@ -1,0 +1,63 @@
+"""
+定时任务函数 — 拉日线 / 拉分钟线，复用 fetcher + db
+"""
+import time
+import logging
+
+from fetcher import fetch_daily, fetch_minute
+from db import upsert_rows, start_job_run, finish_job_run
+from config import STOCK_CODES
+
+from .trading_cal import is_trading_day
+
+logger = logging.getLogger("stock_data_job")
+
+
+def _run(job_name, fetch_fn, table, conflict_cols):
+    """通用任务执行：交易日判断 + 遍历股票池拉取入库 + 记录 job_runs"""
+    if not is_trading_day():
+        logger.info("%s: 非交易日，跳过", job_name)
+        return
+
+    run_id = start_job_run(job_name)
+    total = 0
+    try:
+        n_codes = len(STOCK_CODES)
+        for i, code in enumerate(STOCK_CODES, 1):
+            logger.info("[%s] %d/%d %s", job_name, i, n_codes, code)
+            rows = fetch_fn(code)
+            total += upsert_rows(rows, table, conflict_cols)
+            time.sleep(0.3)  # akshare 频率限制
+        finish_job_run(run_id, "ok", rows=total)
+        logger.info("%s 完成，共 %d 条", job_name, total)
+    except Exception as e:
+        finish_job_run(run_id, "failed", error=str(e))
+        logger.exception("%s 失败", job_name)
+        raise
+
+
+def job_fetch_daily():
+    """拉取全股票池日线"""
+    _run("job_fetch_daily", fetch_daily, "daily_prices",
+         ["stock_code", "trade_date"])
+
+
+def job_fetch_minute():
+    """拉取全股票池当天分钟线（收盘后全量）"""
+    _run("job_fetch_minute", fetch_minute, "minute_prices",
+         ["stock_code", "trade_time", "period"])
+
+
+def job_pool():
+    """股池月度筛选入库（不判交易日：月末/月初均可跑）"""
+    run_id = start_job_run("pool")
+    try:
+        from a_stock_filter import run_pool
+        from config import POOL_NAME
+        n = run_pool(pool_name=POOL_NAME)
+        finish_job_run(run_id, "ok", rows=n)
+        logger.info("pool 完成，共 %d 条", n)
+    except Exception as e:
+        finish_job_run(run_id, "failed", error=str(e))
+        logger.exception("pool 失败")
+        raise
