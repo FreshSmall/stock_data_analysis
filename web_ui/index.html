@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>股票数据看板</title>
-  <link rel="stylesheet" href="/css/main.css">
+  <link rel="stylesheet" href="/css/main.css?v=8">
 </head>
 <body>
   <header class="topbar">
@@ -12,14 +12,102 @@
     <nav class="tabs">
       <button class="tab active" data-tab="market">行情</button>
       <button class="tab" data-tab="pools">股池</button>
+      <button class="tab" data-tab="signals">✨ 信号</button>
     </nav>
     <div class="controls">
       <label>股票
         <select id="stockSelect"></select>
       </label>
+      <button id="filterToggleBtn">⚙ 筛选</button>
+      <div id="stockInfo" class="stock-info"></div>
       <button id="refreshBtn">刷新</button>
     </div>
   </header>
+
+  <!-- 股票筛选行（可折叠） -->
+  <div id="filterBar" class="filter-bar hidden">
+    <label>交易所
+      <select id="filterExchange">
+        <option value="">全部</option>
+        <option value="上海">沪市</option>
+        <option value="深圳">深市</option>
+        <option value="北交所">北交所</option>
+      </select>
+    </label>
+    <label>板块
+      <select id="filterIndustry"><option value="">全部</option></select>
+    </label>
+    <label data-term="total_mv">总市值(亿)
+      <select id="filterMv">
+        <option value="">全部</option>
+        <option value="0-100">小盘 (&lt;100)</option>
+        <option value="100-500">中小盘 (100-500)</option>
+        <option value="500-1000">中盘 (500-1000)</option>
+        <option value="1000-10000">大盘 (1000-1万)</option>
+        <option value="10000-999999">超大盘 (&gt;1万)</option>
+      </select>
+    </label>
+    <label data-term="pe">PE
+      <select id="filterPe">
+        <option value="">全部</option>
+        <option value="0-15">低估 (&lt;15)</option>
+        <option value="15-25">合理 (15-25)</option>
+        <option value="25-40">偏高 (25-40)</option>
+        <option value="40-999999">高估 (&gt;40)</option>
+      </select>
+    </label>
+    <label data-term="pb">PB
+      <select id="filterPb">
+        <option value="">全部</option>
+        <option value="0-1">破净 (&lt;1)</option>
+        <option value="1-3">合理 (1-3)</option>
+        <option value="3-5">偏高 (3-5)</option>
+        <option value="5-999999">高估 (&gt;5)</option>
+      </select>
+    </label>
+    <label data-term="pct_change">涨跌幅(%)
+      <select id="filterPct">
+        <option value="">全部</option>
+        <option value="5-999999">强势 (&gt;5%)</option>
+        <option value="0-5">上涨 (0-5%)</option>
+        <option value="-5-0">下跌 (-5-0%)</option>
+        <option value="-999999--5">弱势 (&lt;-5%)</option>
+      </select>
+    </label>
+    <label data-term="turnover_rate">换手率(%)
+      <select id="filterTurnover">
+        <option value="">全部</option>
+        <option value="0-1">低迷 (&lt;1%)</option>
+        <option value="1-5">正常 (1-5%)</option>
+        <option value="5-10">活跃 (5-10%)</option>
+        <option value="10-999999">高度活跃 (&gt;10%)</option>
+      </select>
+    </label>
+    <span id="filterCount" class="filter-count"></span>
+    <button id="filterResetBtn">重置</button>
+  </div>
+
+  <!-- 筛选结果表格（筛选栏展开时显示） -->
+  <div id="filterResult" class="filter-result hidden">
+    <div class="filter-result-toolbar">
+      <span id="filterResultCount" class="filter-count">共 0 只</span>
+      <input id="filterSearch" class="signal-search" placeholder="🔍 在结果中搜索代码/名称…">
+    </div>
+    <div class="filter-result-wrap">
+      <table class="pool-table signal-table">
+        <thead>
+          <tr>
+            <th>代码</th><th>名称</th><th>板块</th>
+            <th data-term="total_mv">总市值(亿)</th>
+            <th data-term="circ_mv">流通市值(亿)</th><th data-term="pe">PE</th>
+            <th data-term="pb">PB</th><th data-term="pct_change">涨跌幅</th>
+            <th data-term="turnover_rate">换手率%</th>
+          </tr>
+        </thead>
+        <tbody id="filterResultBody"></tbody>
+      </table>
+    </div>
+  </div>
 
   <main class="content">
     <!-- 行情页 -->
@@ -63,13 +151,64 @@
             <thead>
               <tr>
                 <th>代码</th><th>名称</th><th>交易所</th><th>现价</th>
-                <th>涨跌幅</th><th>总市值(亿)</th><th>流通市值(亿)</th>
-                <th>换手率%</th><th>PE</th><th>PB</th><th>上市日期</th>
+                <th data-term="pct_change">涨跌幅</th>
+                <th data-term="total_mv">总市值(亿)</th>
+                <th data-term="circ_mv">流通市值(亿)</th>
+                <th data-term="turnover_rate">换手率%</th>
+                <th data-term="pe">PE</th>
+                <th data-term="pb">PB</th>
+                <th>上市日期</th>
               </tr>
             </thead>
             <tbody id="poolBody"><tr><td colspan="11" class="pool-hint">点击「股池」加载</td></tr></tbody>
           </table>
         </div>
+      </div>
+    </section>
+    <!-- 信号页 -->
+    <section id="tab-signals" class="tab-panel hidden">
+      <div class="signal-wrap">
+        <!-- 筛选工具栏 -->
+        <div class="signal-toolbar">
+          <label>📅 日期 <input type="date" id="signalDate"></label>
+          <label>标签 <select id="signalLabel">
+            <option value="">全部</option>
+            <option value="强烈关注">🟢 强烈关注</option>
+            <option value="值得关注">🟡 值得关注</option>
+            <option value="中性观察">⚪ 中性观察</option>
+            <option value="暂不参与">⚫ 暂不参与</option>
+          </select></label>
+          <label class="range-label">最低分 <input type="range" id="signalMinScore" min="0" max="100" value="0"><span id="signalMinScoreVal">0</span></label>
+          <input id="signalSearch" class="signal-search" placeholder="🔍 搜索代码/名称…">
+          <button id="signalScanBtn">🔄 扫描</button>
+        </div>
+
+        <!-- 汇总卡片 -->
+        <div id="signalSummary" class="signal-summary"></div>
+
+        <!-- 排行榜表格 -->
+        <div class="signal-table-wrap">
+          <table class="signal-table">
+            <thead>
+              <tr>
+                <th>#</th>
+                <th>代码</th><th>名称</th>
+                <th class="sortable" data-sort="score" data-term="score">评分 ▾</th>
+                <th>标签</th>
+                <th class="sortable" data-sort="vol_ratio" data-term="vol_ratio">量比 ▾</th>
+                <th data-term="vol_price_trend">量价趋势</th>
+                <th data-term="macd">MACD</th>
+                <th class="sortable rsi-col" data-sort="rsi" data-term="rsi">RSI ▾</th>
+                <th class="sortable vwap-col" data-sort="vwap_deviation" data-term="vwap_deviation">VWAP偏离 ▾</th>
+                <th>信号理由</th>
+              </tr>
+            </thead>
+            <tbody id="signalBody"><tr><td colspan="11" class="signal-hint">点击「信号」加载</td></tr></tbody>
+          </table>
+        </div>
+
+        <!-- 详情面板（点击行展开） -->
+        <div id="signalDetail" class="signal-detail hidden"></div>
       </div>
     </section>
   </main>

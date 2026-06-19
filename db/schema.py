@@ -77,6 +77,7 @@ def init_db():
                 stock_code    VARCHAR(10)  NOT NULL,
                 stock_name    VARCHAR(50),
                 exchange      VARCHAR(10)  COMMENT '交易所:上海/深圳/北交所',
+                industry      VARCHAR(50)  COMMENT '行业大类(证监会分类首段)',
                 close         DECIMAL(12,3) COMMENT '筛选时现价',
                 pct_change    DECIMAL(8,4)  COMMENT '当日涨跌幅%',
                 total_mv      DECIMAL(14,2) COMMENT '总市值(亿)',
@@ -93,5 +94,72 @@ def init_db():
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='股池筛选结果快照'
         """))
 
+        conn.execute(text("""
+            CREATE TABLE IF NOT EXISTS stock_signal (
+                id              BIGINT AUTO_INCREMENT PRIMARY KEY,
+                signal_date     DATE         NOT NULL COMMENT '信号日期',
+                stock_code      VARCHAR(10)  NOT NULL,
+                stock_name      VARCHAR(50),
+                score           DECIMAL(5,2) NOT NULL COMMENT '综合评分 0-100',
+                label           VARCHAR(20)  NOT NULL COMMENT '强烈关注/值得关注/中性观察/暂不参与',
+                -- 量价维度
+                vol_ratio       DECIMAL(8,4) COMMENT '量比',
+                vol_zscore      DECIMAL(8,4) COMMENT '成交量Z-Score',
+                vol_price_trend VARCHAR(20)  COMMENT '量价关系:同向多/同向空/顶背离/底背离/中性',
+                obv_signal      VARCHAR(20)  COMMENT 'OBV信号:新高/新低/持平',
+                vr_value        DECIMAL(8,2) COMMENT 'VR容量比率',
+                breakout        TINYINT(1)   DEFAULT 0 COMMENT '是否放量突破',
+                pullback        TINYINT(1)   DEFAULT 0 COMMENT '是否缩量回踩',
+                -- 价格维度
+                ma_trend        VARCHAR(20)  COMMENT '均线趋势:多头/空头/缠绕',
+                macd_signal     VARCHAR(20)  COMMENT 'MACD信号:金叉/死叉/红柱/绿柱',
+                rsi_value       DECIMAL(6,2),
+                golden_cross    TINYINT(1)   DEFAULT 0 COMMENT '当日是否MA金叉',
+                -- 分时维度
+                vwap            DECIMAL(12,3) COMMENT '当日VWAP',
+                vwap_deviation  DECIMAL(8,4)  COMMENT '收盘价相对VWAP偏离%',
+                tail_concentration DECIMAL(8,4) COMMENT '尾盘集中度%',
+                -- 分项得分
+                score_vol_price DECIMAL(5,2) COMMENT '量价配合得分',
+                score_trend     DECIMAL(5,2) COMMENT '趋势方向得分',
+                score_momentum  DECIMAL(5,2) COMMENT '动量信号得分',
+                score_anomaly   DECIMAL(5,2) COMMENT '异动检测得分',
+                score_intraday  DECIMAL(5,2) COMMENT '分时确认得分',
+                -- 元数据
+                reason          TEXT          COMMENT '信号理由(自然语言摘要)',
+                created_at      DATETIME      DEFAULT CURRENT_TIMESTAMP,
+                UNIQUE KEY uk_signal_date_code (signal_date, stock_code),
+                INDEX idx_signal_date_score (signal_date, score DESC),
+                INDEX idx_signal_date_label (signal_date, label),
+                INDEX idx_code (stock_code)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='每日成交量分析信号快照'
+        """))
+
+        conn.execute(text("""
+            CREATE TABLE IF NOT EXISTS stock_signal_log (
+                id              BIGINT AUTO_INCREMENT PRIMARY KEY,
+                stock_code      VARCHAR(10)  NOT NULL,
+                signal_date     DATE         NOT NULL,
+                score           DECIMAL(5,2) NOT NULL,
+                label           VARCHAR(20)  NOT NULL,
+                action          VARCHAR(20)  COMMENT '建议动作:关注/加仓/减仓/清仓/无',
+                next_5d_return  DECIMAL(8,4) COMMENT '5日后收益率%(异步回填)',
+                next_20d_return DECIMAL(8,4) COMMENT '20日后收益率%(异步回填)',
+                created_at      DATETIME     DEFAULT CURRENT_TIMESTAMP,
+                INDEX idx_code_date (stock_code, signal_date),
+                INDEX idx_date_score (signal_date, score DESC)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='信号历史与回测追踪'
+        """))
+
+        # stock_pool 表补充 industry 列（已存在表不会重建，需 ALTER）
+        try:
+            conn.execute(text(
+                "ALTER TABLE stock_pool ADD COLUMN industry VARCHAR(50) "
+                "COMMENT '行业大类(证监会分类首段)' AFTER exchange"
+            ))
+            print("  stock_pool 新增 industry 列")
+        except Exception:
+            pass  # 列已存在
+
         conn.commit()
-    print("✅ 数据库初始化完成: daily_prices, minute_prices, stocks, job_runs, stock_pool")
+    print("✅ 数据库初始化完成: daily_prices, minute_prices, stocks, job_runs, stock_pool, stock_signal, stock_signal_log")

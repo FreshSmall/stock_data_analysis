@@ -1,0 +1,11 @@
+[shell_environment_policy]
+inherit = "core"
+
+[shell_environment_policy.set]
+ANTHROPIC_AUTH_TOKEN = "9a16969796744bdfab06fbca2c34a0be.yNZoGGHdRtgf84Ne"
+ANTHROPIC_BASE_URL = "https://open.bigmodel.cn/api/anthropic"
+ANTHROPIC_DEFAULT_HAIKU_MODEL = "glm-4.7"
+ANTHROPIC_DEFAULT_OPUS_MODEL = "glm-5.1"
+ANTHROPIC_DEFAULT_SONNET_MODEL = "glm-5.1"
+ANTHROPIC_MODEL = "glm-5.1"
+ANTHROPIC_REASONING_MODEL = "glm-5.1"

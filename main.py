@@ -10,6 +10,10 @@
   python main.py analyze                       # 分析所有股票
   python main.py analyze 600519                # 分析指定股票
   python main.py run                           # 日常一键: 拉日线+分钟线+分析
+  python main.py signal                        # 扫描股池信号并评分入库
+  python main.py backtest                      # 回测: 历史扫描+收益回填+报告
+  python main.py backfill                      # 回填信号收益率
+  python main.py backtest_report               # 生成回测报告
 """
 import sys
 import time
@@ -82,13 +86,60 @@ def do_pool():
     run_pool()
 
 
+def do_signal():
+    """扫描股池信号并评分入库"""
+    from signal_runner import run_daily_signal
+    run_daily_signal()
+
+
+def do_backtest():
+    """回测：历史扫描 + 收益回填 + 报告"""
+    from signal_backtest import (
+        backtest_signals, backfill_returns, analyze_performance, generate_report_md,
+    )
+    import os
+    # 默认回测最近 1 年（公共数据区间）
+    from datetime import date, timedelta
+    end = date.today() - timedelta(days=1)
+    start = end - timedelta(days=365)
+    backtest_signals(start.strftime("%Y-%m-%d"), end.strftime("%Y-%m-%d"), step=5)
+    backfill_returns()
+    result = analyze_performance()
+    out = os.path.join("spec", "volume-analysis",
+                       f"{date.today()}-signal-backtest-report.md")
+    generate_report_md(result, out)
+    print(f"\n📄 报告已生成: {out}")
+
+
+def do_backfill():
+    """仅回填收益率（已跑过回测）"""
+    from signal_backtest import backfill_returns
+    backfill_returns()
+
+
+def do_backtest_report():
+    """仅生成报告（基于已有数据）"""
+    from signal_backtest import analyze_performance, generate_report_md
+    from datetime import date
+    import os
+    result = analyze_performance()
+    out = os.path.join("spec", "volume-analysis",
+                       f"{date.today()}-signal-backtest-report.md")
+    generate_report_md(result, out)
+    print(f"\n📄 报告已生成: {out}")
+
+
 COMMANDS = {
-    "init":         ("初始化数据库",          do_init),
-    "fetch_daily":  ("拉取日线数据",          do_fetch_daily),
-    "fetch_minute": ("拉取分钟线数据",        do_fetch_minute),
-    "analyze":      ("输出分析报告",          do_analyze),
-    "run":          ("日常一键: 拉取 + 分析",  do_run),
-    "pool":         ("股池筛选并入库",        do_pool),
+    "init":             ("初始化数据库",            do_init),
+    "fetch_daily":      ("拉取日线数据",            do_fetch_daily),
+    "fetch_minute":     ("拉取分钟线数据",          do_fetch_minute),
+    "analyze":          ("输出分析报告",            do_analyze),
+    "run":              ("日常一键: 拉取 + 分析",    do_run),
+    "pool":             ("股池筛选并入库",          do_pool),
+    "signal":           ("扫描股池信号并评分入库",   do_signal),
+    "backtest":         ("回测: 历史扫描+收益回填+报告", do_backtest),
+    "backfill":         ("回填信号收益率",          do_backfill),
+    "backtest_report":  ("生成回测报告",            do_backtest_report),
 }
 
 

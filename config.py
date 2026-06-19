@@ -44,3 +44,16 @@ POOL_NAME = os.getenv("POOL_NAME", "default")
 POOL_MIN_TOTAL_MV = float(os.getenv("POOL_MIN_TOTAL_MV", "30"))        # 总市值(亿)
 POOL_MIN_CIRC_MV = float(os.getenv("POOL_MIN_CIRC_MV", "15"))          # 流通市值(亿,近似自由流通)
 POOL_MIN_LISTING_DAYS = int(os.getenv("POOL_MIN_LISTING_DAYS", "365")) # 252交易日≈365天
+
+# ===== 信号系统（signal）=====
+SIGNAL_CRON = os.getenv("SIGNAL_CRON", "0 17 * * 1-5")         # 盘后扫描(工作日17:00)
+SIGNAL_MIN_SCORE = float(os.getenv("SIGNAL_MIN_SCORE", "0"))   # 最低入库评分(0=全量)
+SIGNAL_BATCH_SIZE = int(os.getenv("SIGNAL_BATCH_SIZE", "50"))  # 并发/分批大小
+SIGNAL_TOP_N = int(os.getenv("SIGNAL_TOP_N", "100"))           # 前端默认展示数
+
+# 评分权重(和为1.0)
+SIGNAL_W_VOL_PRICE = float(os.getenv("SIGNAL_W_VOL_PRICE", "0.30"))   # 量价配合
+SIGNAL_W_TREND = float(os.getenv("SIGNAL_W_TREND", "0.25"))           # 趋势方向
+SIGNAL_W_MOMENTUM = float(os.getenv("SIGNAL_W_MOMENTUM", "0.20"))     # 动量信号
+SIGNAL_W_ANOMALY = float(os.getenv("SIGNAL_W_ANOMALY", "0.15"))       # 异动检测
+SIGNAL_W_INTRADAY = float(os.getenv("SIGNAL_W_INTRADAY", "0.10"))     # 分时确认

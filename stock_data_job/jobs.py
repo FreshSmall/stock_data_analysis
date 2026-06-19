@@ -61,3 +61,26 @@ def job_pool():
         finish_job_run(run_id, "failed", error=str(e))
         logger.exception("pool 失败")
         raise
+
+
+def job_signal(force: bool = False):
+    """盘后信号扫描：批量评分入库 stock_signal
+
+    参数:
+      force: True 时跳过交易日判断（用于 --once 手动调试）
+    """
+    if not force and not is_trading_day():
+        logger.info("signal: 非交易日，跳过")
+        return
+
+    run_id = start_job_run("signal")
+    try:
+        from signal_runner import run_daily_signal
+        result = run_daily_signal(verbose=False)
+        finish_job_run(run_id, "ok", rows=result["scored"])
+        logger.info("signal 完成: 共 %d, 评分 %d, 跳过 %d",
+                    result["total"], result["scored"], result["skipped"])
+    except Exception as e:
+        finish_job_run(run_id, "failed", error=str(e))
+        logger.exception("signal 失败")
+        raise

@@ -97,8 +97,8 @@ def fetch_sina_all() -> pd.DataFrame:
 
 
 def fetch_em_basic_batch(codes: List[str], batch_size: int = 50) -> Dict[str, Dict[str, Any]]:
-    """东财datacenter批量查上市日期+B股标识。codes: 6位代码列表。
-    返回 {code: {"list_date": "YYYY-MM-DD", "has_b": bool}}。"""
+    """东财datacenter批量查上市日期+B股标识+行业。codes: 6位代码列表。
+    返回 {code: {"list_date": "YYYY-MM-DD", "has_b": bool, "industry": "行业"}}。"""
     url = "https://datacenter-web.eastmoney.com/api/data/v1/get"
     result = {}
     for i in range(0, len(codes), batch_size):
@@ -106,7 +106,7 @@ def fetch_em_basic_batch(codes: List[str], batch_size: int = 50) -> Dict[str, Di
         code_in = ",".join(f'"{c}"' for c in batch)
         params = {
             "reportName": "RPT_F10_BASIC_ORGINFO",
-            "columns": "SECURITY_CODE,LISTING_DATE,STR_CODEB",
+            "columns": "SECURITY_CODE,LISTING_DATE,STR_CODEB,INDUSTRYCSRC1",
             "filter": f"(SECURITY_CODE in ({code_in}))",
             "pageSize": str(batch_size),
             "pageNumber": "1",
@@ -124,8 +124,12 @@ def fetch_em_basic_batch(codes: List[str], batch_size: int = 50) -> Dict[str, Di
             code = str(row.get("SECURITY_CODE"))
             ld = row.get("LISTING_DATE")
             list_date = str(ld)[:10] if ld else None
+            # INDUSTRYCSRC1 格式如 "金融业-货币金融服务"，取大类（首段）
+            industry_raw = row.get("INDUSTRYCSRC1") or ""
+            industry = industry_raw.split("-")[0].strip() if industry_raw else None
             result[code] = {"list_date": list_date,
-                            "has_b": bool(row.get("STR_CODEB"))}
+                            "has_b": bool(row.get("STR_CODEB")),
+                            "industry": industry}
         time.sleep(0.2)
     return result
 
@@ -202,6 +206,7 @@ def fetch_and_filter(trade_date=None) -> List[Dict[str, Any]]:
             "stock_code": row.code6,
             "stock_name": row.name,
             "exchange": exch,
+            "industry": info.get("industry"),
             "close": row.trade,
             "pct_change": row.changepercent,
             "total_mv": round(row.mktcap / 10000, 2),
