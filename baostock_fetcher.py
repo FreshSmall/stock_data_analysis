@@ -98,10 +98,21 @@ def _query(bs_code: str, fields: str, start: str, end: str,
         bs.logout()
 
 
-def fetch_daily_baostock(stock_code: str, days: int) -> list:
-    """BaoStock 日线（前复权）→ schema dict 列表"""
+def fetch_daily_baostock(stock_code: str, days: int = None,
+                         start_date: str = None) -> list:
+    """BaoStock 日线（前复权）→ schema dict 列表。
+
+    参数（二选一）:
+      days:       回溯天数（与 fetch_daily 一致）
+      start_date: 增量起始日期 'YYYYMMDD' 或 'YYYY-MM-DD'，指定后忽略 days
+    """
     end = datetime.now().strftime("%Y-%m-%d")
-    start = (datetime.now() - timedelta(days=days)).strftime("%Y-%m-%d")
+    if start_date:
+        # 统一为 YYYY-MM-DD
+        start = start_date.replace("-", "")[:4] + "-" + start_date.replace("-", "")[4:6] + "-" + start_date.replace("-", "")[6:8]
+    else:
+        days = days or 365
+        start = (datetime.now() - timedelta(days=days)).strftime("%Y-%m-%d")
     rows = _query(_to_bs_code(stock_code), _DAILY_FIELDS,
                   start, end, frequency="d", adjustflag="2")
     return [_parse_daily_row(r, stock_code) for r in rows]

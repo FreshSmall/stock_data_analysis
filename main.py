@@ -30,14 +30,31 @@ def do_init():
 
 
 def do_fetch_daily(codes: list[str] = None):
-    """拉取日线数据"""
+    """拉取日线数据（增量：有历史数据的从最后交易日+1开始，无历史的全量回溯）"""
+    from db import get_last_trade_dates
     codes = codes or STOCK_CODES
-    print(f"\n📥 开始拉取日线数据，共 {len(codes)} 只股票\n")
+    print(f"\n📥 开始拉取日线数据（增量），共 {len(codes)} 只股票\n")
+
+    # 批量查每只股票最后交易日
+    last_dates = get_last_trade_dates(codes)
+    full_count = len(codes) - len(last_dates)  # 无历史数据，需全量
+    incr_count = len(last_dates)               # 有历史，增量
+    print(f"  增量拉取: {incr_count} 只 | 全量拉取(首次): {full_count} 只\n")
+
     total = 0
     for i, code in enumerate(codes, 1):
-        print(f"  [{i}/{len(codes)}] {code} ...", end=" ")
+        last = last_dates.get(code)
+        if last:
+            # 增量：从最后交易日次日开始（YYYYMMDD 格式，去掉横线）
+            start = last.replace("-", "")
+            mode = f"增量({last}起)"
+        else:
+            start = None  # 全量回溯 HISTORY_DAYS
+            mode = "全量"
+
+        print(f"  [{i}/{len(codes)}] {code} {mode} ...", end=" ")
         try:
-            rows = fetch_daily(code)
+            rows = fetch_daily(code, start_date=start)
             n = upsert_rows(rows, "daily_prices", conflict_cols=["stock_code", "trade_date"])
             total += n
             print(f"✅ {n} 条")

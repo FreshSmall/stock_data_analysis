@@ -17,10 +17,20 @@ def fetch_stock_list() -> pd.DataFrame:
     return df[["代码", "名称"]].rename(columns={"代码": "stock_code", "名称": "stock_name"})
 
 
-def _fetch_daily_akshare(stock_code: str, days: int) -> list[dict]:
-    """主源 akshare 日线历史数据（前复权），返回 dict 列表"""
-    end = datetime.now().strftime("%Y%m%d")
-    start = (datetime.now() - timedelta(days=days)).strftime("%Y%m%d")
+def _fetch_daily_akshare(stock_code: str, days: int = None,
+                         start_date: str = None, end_date: str = None) -> list[dict]:
+    """主源 akshare 日线历史数据（前复权），返回 dict 列表。
+
+    参数（二选一）:
+      days:       回溯天数（如 365），从 end_date 往前推
+      start_date: 明确起始日期 'YYYYMMDD'（增量拉取用），与 end_date 配合
+    """
+    end = end_date or datetime.now().strftime("%Y%m%d")
+    if start_date:
+        start = start_date
+    else:
+        days = days or HISTORY_DAYS
+        start = (datetime.now() - timedelta(days=days)).strftime("%Y%m%d")
 
     df = ak.stock_zh_a_hist(
         symbol=stock_code,
@@ -46,11 +56,26 @@ def _fetch_daily_akshare(stock_code: str, days: int) -> list[dict]:
     return df[[c for c in keep if c in df.columns]].to_dict("records")
 
 
-def fetch_daily(stock_code: str, days: int = None) -> list[dict]:
+def fetch_daily(stock_code: str, days: int = None,
+                start_date: str = None) -> list[dict]:
     """
     拉取日线历史数据：主源 akshare，失败/返回空时降级 BaoStock
     主+备均失败时抛异常（交由上层处理，不静默丢数据）
+
+    参数（二选一）:
+      days:       回溯天数（首次拉取/全量补数据用），默认 HISTORY_DAYS
+      start_date: 增量拉取起始日期 'YYYYMMDD'，指定后忽略 days
     """
+    if start_date:
+        try:
+            rows = safe_fetch(lambda c: _fetch_daily_akshare(c, start_date=start_date), stock_code)
+            if rows:
+                return rows
+            print(f"   ⚠️  {stock_code} 主源返回空，降级 BaoStock")
+        except Exception as e:
+            print(f"   ⚠️  {stock_code} 主源失败({e})，降级 BaoStock")
+        return fetch_daily_baostock(stock_code, start_date=start_date)
+
     days = days or HISTORY_DAYS
     try:
         rows = safe_fetch(_fetch_daily_akshare, stock_code, days)

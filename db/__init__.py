@@ -13,6 +13,7 @@ from .schema import init_db
 from .query import (
     query_daily, query_minute, query_pool_periods, query_pool_stocks,
     query_signals, query_signal_detail, query_signal_history,
+    get_last_trade_dates,
 )
 from .writer import upsert_rows, start_job_run, finish_job_run
 
@@ -20,5 +21,6 @@ __all__ = [
     "get_engine", "init_db",
     "query_daily", "query_minute", "query_pool_periods", "query_pool_stocks",
     "query_signals", "query_signal_detail", "query_signal_history",
+    "get_last_trade_dates",
     "upsert_rows", "start_job_run", "finish_job_run",
 ]

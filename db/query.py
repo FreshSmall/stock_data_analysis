@@ -143,3 +143,28 @@ def query_signal_history(stock_code: str, days: int = 60) -> pd.DataFrame:
         LIMIT :lim
     """), engine, params={"code": stock_code, "lim": days})
     return df.sort_values("signal_date").reset_index(drop=True)
+
+
+def get_last_trade_dates(stock_codes: list) -> dict:
+    """批量查询多只股票的最后交易日，返回 {stock_code: 'YYYY-MM-DD'}。
+    无数据的股票不在返回结果中（用于增量拉取判断起点）。"""
+    if not stock_codes:
+        return {}
+    engine = get_engine()
+    # 分批避免 SQL IN 列表过长
+    out = {}
+    batch_size = 500
+    for i in range(0, len(stock_codes), batch_size):
+        batch = stock_codes[i:i + batch_size]
+        placeholders = ",".join(f":c{j}" for j in range(len(batch)))
+        params = {f"c{j}": c for j, c in enumerate(batch)}
+        df = pd.read_sql(text(
+            f"SELECT stock_code, MAX(trade_date) AS last_date "
+            f"FROM daily_prices "
+            f"WHERE stock_code IN ({placeholders}) "
+            f"GROUP BY stock_code"
+        ), engine, params=params)
+        for _, row in df.iterrows():
+            if row["last_date"] is not None:
+                out[row["stock_code"]] = str(row["last_date"])[:10]
+    return out
