@@ -57,6 +57,8 @@ export function labelBadge(label) {
     '值得关注': '🟡值得关注',
     '中性观察': '⚪中性观察',
     '暂不参与': '⚫暂不参与',
+    '策略命中': '✅策略命中',
+    '策略关注': '🔵策略关注',
   };
   return map[label] || label;
 }
@@ -78,6 +80,21 @@ export function volPriceClass(trend) {
     '同向空': 'vp-neutral', '中性': 'vp-neutral',
   };
   return map[trend] || 'vp-neutral';
+}
+
+/** 量价趋势显示文字（带 emoji 直观提示） */
+export function volPriceLabel(trend) {
+  if (!trend) return '-';
+  const map = {
+    '同向多': '🟢 同向多',
+    '同向空': '🔴 同向空',
+    '顶背离': '⚠️ 顶背离',
+    '底背离': '🔵 底背离',
+    '放量突破': '🚀 放量突破',
+    '缩量回踩': '🔄 缩量回踩',
+    '中性': '⚪ 中性',
+  };
+  return map[trend] || trend;
 }
 
 /** MACD 信号颜色 class */

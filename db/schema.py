@@ -151,6 +151,27 @@ def init_db():
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='信号历史与回测追踪'
         """))
 
+        conn.execute(text("""
+            CREATE TABLE IF NOT EXISTS chip_distribution (
+                id                BIGINT AUTO_INCREMENT PRIMARY KEY,
+                stock_code        VARCHAR(10)   NOT NULL,
+                trade_date        DATE          NOT NULL COMMENT '交易日',
+                profit_ratio      DECIMAL(8,6)  COMMENT '获利比例 0-1(当前价下方筹码占比)',
+                avg_cost          DECIMAL(12,3) COMMENT '平均成本(50%筹码对应价位)',
+                cost_90_low       DECIMAL(12,3) COMMENT '90%筹码下沿',
+                cost_90_high      DECIMAL(12,3) COMMENT '90%筹码上沿',
+                concentration_90  DECIMAL(8,4)  COMMENT '90%集中度=(高-低)/(高+低)',
+                cost_70_low       DECIMAL(12,3) COMMENT '70%筹码下沿',
+                cost_70_high      DECIMAL(12,3) COMMENT '70%筹码上沿',
+                concentration_70  DECIMAL(8,4)  COMMENT '70%集中度=(高-低)/(高+低)',
+                distribution      TEXT          COMMENT '筹码分布JSON数组[(price,weight),...]',
+                updated_at        DATETIME      DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+                UNIQUE KEY uk_code_date (stock_code, trade_date),
+                INDEX idx_code_date (stock_code, trade_date),
+                INDEX idx_date (trade_date)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='筹码分布(本地复现东方财富CYQ算法)'
+        """))
+
         # stock_pool 表补充 industry 列（已存在表不会重建，需 ALTER）
         try:
             conn.execute(text(
@@ -161,5 +182,65 @@ def init_db():
         except Exception:
             pass  # 列已存在
 
+        # stock_signal 表补充筹码维度列（已存在表不会重建，需 ALTER）
+        for ddl in (
+            "ALTER TABLE stock_signal ADD COLUMN chip_profit_ratio DECIMAL(8,6) "
+            "COMMENT '获利比例0-1' AFTER tail_concentration",
+            "ALTER TABLE stock_signal ADD COLUMN chip_concentration DECIMAL(8,4) "
+            "COMMENT '90%筹码集中度' AFTER chip_profit_ratio",
+            "ALTER TABLE stock_signal ADD COLUMN chip_avg_cost DECIMAL(12,3) "
+            "COMMENT '筹码平均成本' AFTER chip_concentration",
+            "ALTER TABLE stock_signal ADD COLUMN chip_label VARCHAR(20) "
+            "COMMENT '筹码标签:筹码锁定/筹码收敛/筹码分散/获利盘堆积' AFTER chip_avg_cost",
+            "ALTER TABLE stock_signal ADD COLUMN chip_bonus DECIMAL(5,2) "
+            "COMMENT '筹码调整分(-5~+5)' AFTER chip_label",
+        ):
+            try:
+                conn.execute(text(ddl))
+                print(f"  stock_signal 新增列: {ddl.split('ADD COLUMN')[1].split()[0]}")
+            except Exception:
+                pass  # 列已存在
+
+        conn.execute(text("""
+            CREATE TABLE IF NOT EXISTS screen_result (
+                id            BIGINT AUTO_INCREMENT PRIMARY KEY,
+                run_id        VARCHAR(40)  NOT NULL COMMENT '漏斗执行批次ID(日期+预设)',
+                run_date      DATE         NOT NULL COMMENT '执行日期',
+                layer         TINYINT      NOT NULL COMMENT '层级: 1=粗筛 2=精筛',
+                preset        VARCHAR(20)  NOT NULL COMMENT '粗筛预设: value/growth/...',
+                strategy      VARCHAR(20)  COMMENT '精筛策略: trend/breakout/...(layer=2)',
+                stock_code    VARCHAR(10)  NOT NULL,
+                stock_name    VARCHAR(50),
+                exchange      VARCHAR(10)  COMMENT '交易所',
+                total_mv      DECIMAL(14,2) COMMENT '总市值(亿)',
+                pe            DECIMAL(12,3),
+                pb            DECIMAL(12,3),
+                turnover      DECIMAL(10,4) COMMENT '换手率%',
+                pct_change    DECIMAL(8,4)  COMMENT '涨跌幅%',
+                industry      VARCHAR(50),
+                `match`       TINYINT(1)   COMMENT '是否策略命中(layer2)',
+                score         DECIMAL(5,2) COMMENT '策略得分',
+                reason        TEXT         COMMENT '策略理由',
+                vol_ratio     DECIMAL(8,4),
+                macd_signal   VARCHAR(20),
+                rsi_value     DECIMAL(6,2),
+                created_at    DATETIME      DEFAULT CURRENT_TIMESTAMP,
+                UNIQUE KEY uk_run_layer_strategy_code (run_id, layer, strategy, stock_code),
+                INDEX idx_run_date (run_date),
+                INDEX idx_layer_preset (layer, preset)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='漏斗筛选结果(粗筛+精筛各层)'
+        """))
+
+        # screen_result 补充 exchange 列（已存在表需 ALTER）
+        try:
+            conn.execute(text(
+                "ALTER TABLE screen_result ADD COLUMN exchange VARCHAR(10) "
+                "COMMENT '交易所' AFTER stock_name"
+            ))
+            print("  screen_result 新增 exchange 列")
+        except Exception:
+            pass  # 列已存在
+
         conn.commit()
-    print("✅ 数据库初始化完成: daily_prices, minute_prices, stocks, job_runs, stock_pool, stock_signal, stock_signal_log")
+    print("✅ 数据库初始化完成: daily_prices, minute_prices, stocks, job_runs, stock_pool, "
+          "stock_signal, stock_signal_log, chip_distribution, screen_result")

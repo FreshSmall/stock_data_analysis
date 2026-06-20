@@ -51,6 +51,11 @@ SIGNAL_MIN_SCORE = float(os.getenv("SIGNAL_MIN_SCORE", "0"))   # 最低入库评
 SIGNAL_BATCH_SIZE = int(os.getenv("SIGNAL_BATCH_SIZE", "50"))  # 并发/分批大小
 SIGNAL_TOP_N = int(os.getenv("SIGNAL_TOP_N", "100"))           # 前端默认展示数
 
+# ===== 漏斗筛选（funnel）=====
+FUNNEL_CRON = os.getenv("FUNNEL_CRON", "0 9 * * 1")              # 每周一09:00
+FUNNEL_PRESET = os.getenv("FUNNEL_PRESET", "value")              # 默认粗筛预设
+FUNNEL_STRATEGIES = os.getenv("FUNNEL_STRATEGIES", "trend,breakout,momentum")  # 精筛策略
+
 # 评分权重(和为1.0)
 SIGNAL_W_VOL_PRICE = float(os.getenv("SIGNAL_W_VOL_PRICE", "0.30"))   # 量价配合
 SIGNAL_W_TREND = float(os.getenv("SIGNAL_W_TREND", "0.25"))           # 趋势方向

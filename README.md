@@ -1,8 +1,8 @@
 # Stock Data Analysis
 
-A股行情数据采集、技术分析、股池筛选与成交量信号系统的全栈应用。
+A股行情数据采集、技术分析、股池筛选、成交量信号与量化策略筛选的全栈应用。
 
-从新浪/东财/akshare/baostock 拉取行情数据，存入 MySQL，做技术指标分析，并基于量价关系生成每日交易信号，通过 Web 看板可视化。
+从新浪/东财/akshare/baostock 拉取行情数据，存入 MySQL，做技术指标分析，基于量价关系生成每日交易信号，并提供趋势跟踪/突破/回调/动量等量化策略筛选，通过 Web 看板可视化。
 
 ## 快速开始
 
@@ -35,10 +35,17 @@ python -m web_api
 
 | 命令 | 说明 |
 |------|------|
-| `python main.py init` | 初始化数据库（含 7 张表） |
+| `python main.py init` | 初始化数据库（含 8 张表） |
 | `python main.py pool` | 股池筛选并入库（全市场行情 + 筛选） |
+| `python main.py screen_pool` | 列出可用粗筛预设 |
+| `python main.py screen_pool value` | 基础粗筛：价值蓝筹 |
+| `python main.py screen_pool growth --top 50` | 成长活跃 前 50 |
+| `python main.py screen_pool --custom "total_mv>100,pe>0"` | 自定义条件粗筛 |
 | `python main.py fetch_daily` | 拉取股池日线数据（增量，自动判断全量/增量） |
 | `python main.py fetch_daily 600519` | 拉取指定股票日线（增量） |
+| `python main.py fetch_chip` | 计算全部股票筹码分布（本地 CYQ 算法，近 90 天） |
+| `python main.py fetch_chip 600519` | 计算指定股票筹码分布 |
+| `python main.py fetch_chip 600519 30` | 指定股票 + 最近 30 天 |
 | `python main.py fetch_minute` | 拉取当天分钟线 |
 | `python main.py analyze` | 分析所有股票（技术指标） |
 | `python main.py analyze 600519` | 分析指定股票 |
@@ -47,6 +54,10 @@ python -m web_api
 | `python main.py backtest` | 回测: 历史扫描 + 收益回填 + 生成报告 |
 | `python main.py backfill` | 回填信号收益率（next_5d/20d_return） |
 | `python main.py backtest_report` | 仅生成回测报告（基于已有数据） |
+| `python main.py screen trend` | 量化策略筛选：趋势跟踪 |
+| `python main.py screen breakout 30` | 量化策略筛选：突破信号 Top30 |
+| `python main.py screen pullback` | 量化策略筛选：回调买入 |
+| `python main.py screen momentum` | 量化策略筛选：动量排名 |
 
 ## 项目结构
 
@@ -58,8 +69,8 @@ stock_data_analysis/
 │
 ├── db/                   # 数据库层
 │   ├── connection.py       # 连接管理
-│   ├── schema.py           # 建表（daily/minute/stocks/job_runs/stock_pool/stock_signal/stock_signal_log）
-│   ├── query.py            # 查询（日线/分钟/股池/信号）
+│   ├── schema.py           # 建表（daily/minute/stocks/job_runs/stock_pool/stock_signal/stock_signal_log/chip_distribution）
+│   ├── query.py            # 查询（日线/分钟/股池/信号/筹码）
 │   └── writer.py           # 写入（upsert / job_runs）
 │
 ├── fetcher.py            # akshare 数据拉取（增量拉取 + 主备切换）
@@ -68,9 +79,14 @@ stock_data_analysis/
 ├── analyze.py            # 技术指标分析（MA/RSI/MACD/金叉）
 │
 ├── volume_engine.py      # 🔥 量价分析引擎（量比/OBV/VR/VWAP/异动检测）
-├── signal_scorer.py      # 🔥 综合评分器（5 维加权 0-100 分 + 标签 + 理由）
+├── signal_scorer.py      # 🔥 综合评分器（5 维加权 0-100 分 + 筹码调整 ±5 + 标签 + 理由）
 ├── signal_runner.py      # 🔥 信号扫描编排（股池 → 批量评分 → 入库）
 ├── signal_backtest.py    # 🔥 信号回测（历史扫描 + 收益回填 + 胜率统计）
+├── strategy_screener.py  # 🔥 量化策略筛选器（趋势/突破/回调/动量）
+├── pool_screener.py     # 🔄 股池基础粗筛器（市值/PE/换手等快照指标）
+├── batch_fetch_daily.py  # 📥 批量拉日线（BaoStock连接复用+增量+粗筛联动）
+├── chip_engine.py        # 🎯 筹码分布引擎（本地复现东方财富 CYQ 算法）
+├── chip_fetcher.py       # 🎯 筹码数据拉取/入库
 │
 ├── stock_data_job/       # 定时任务（APScheduler）
 │   ├── __main__.py         # 入口: python -m stock_data_job
@@ -82,7 +98,7 @@ stock_data_analysis/
 │   ├── __main__.py         # 入口: python -m web_api
 │   ├── app.py              # FastAPI 应用（含 web_ui 静态托管）
 │   ├── schemas.py          # 响应序列化
-│   └── routes/             # 路由: stocks / analyze / jobs / pools / signals
+│   └── routes/             # 路由: stocks / analyze / jobs / pools / signals / strategy
 │
 ├── web_ui/               # 前端看板（原生 HTML + ECharts）
 │   ├── index.html          # 单页入口（3 个 tab）
@@ -176,7 +192,87 @@ python main.py backtest        # 回测验证
 python main.py backtest_report # 生成报告
 ```
 
-### 5. 定时任务
+### 5. 🔄 分层筛选系统（漏斗式粗筛 → 精筛 → 精细分析）
+
+量化分析采用三层漏斗，避免盲目全量拉取，逐层缩小范围：
+
+```
+全市场 4216 只
+    │  第 1 层：基础粗筛（stock_pool 快照指标，零网络开销）
+    ▼
+约 100-1000 只候选（视预设）
+    │  第 2 层：拉日线 + 技术指标精筛（MA/RSI/MACD/量比）
+    ▼
+约 30-80 只精选
+    │  第 3 层：筹码分布 + 信号评分
+    ▼
+约 10-20 只重点关注
+```
+
+#### 第 1 层：基础粗筛（`pool_screener.py`）
+
+基于 stock_pool 已有的行情快照（市值/PE/PB/换手率/涨跌幅/行业/上市日期），不需要日线数据：
+
+| 预设 | 条件 | 典型结果 | 适用场景 |
+|------|------|---------|---------|
+| `value` 价值蓝筹 | 市值>200亿 + PE 5-20 + PB<3 | ~243 只 | 稳健长线 |
+| `growth` 成长活跃 | 市值 50-500亿 + PE>0 + 换手 2-10% | ~1046 只 | 中短线波段 |
+| `breakout` 低价突破 | 市值>50亿 + 涨>3% + 换手>3% | ~433 只 | 动量突破 |
+| `oversold` 超跌反弹 | 市值>100亿 + 跌<-5% + PE>0 | ~74 只 | 抄底候选 |
+| `dividend` 高股息防御 | 市值>300亿 + PE<15 + PB<1.5 | ~101 只 | 防御配置 |
+| `all_active` 全市场活跃 | 市值>50亿 + 换手>1% | ~2534 只 | 宽口径精筛输入 |
+
+```bash
+python main.py screen_pool                    # 列出预设
+python main.py screen_pool value --top 50     # 价值蓝筹 Top50
+python main.py screen_pool growth             # 成长活跃全部
+python main.py screen_pool --custom "total_mv>500,pe<20,turnover>1"  # 自定义
+```
+
+#### 第 1.5 层：按粗筛结果拉日线
+
+只对粗筛出的候选股拉日线（而非全市场），大幅减少网络开销：
+
+```bash
+python batch_fetch_daily.py --from-screen value     # 仅拉价值蓝筹的日线
+python batch_fetch_daily.py --from-screen growth --top 200
+```
+
+#### 第 2 层：技术指标精筛（`strategy_screener.py`，见下方第 6 节）
+
+对粗筛结果用 4 种策略精筛，支持 `--from-pool` 直接从粗筛预设切入：
+
+```bash
+python main.py screen trend --from-pool value       # 对价值蓝筹做趋势跟踪
+python main.py screen breakout --from-pool growth   # 对成长活跃做突破筛选
+```
+
+### 6. 🔥 量化策略筛选
+
+针对波段周期（1-4 周）的 4 种选股策略，从全市场筛选符合特定形态的股票。复用现有 MA/RSI/MACD/量价指标，按策略条件精准筛选。
+
+| 策略 | 适用场景 | 核心条件 | 命令 |
+|------|---------|---------|------|
+| **📈 趋势跟踪** | 顺势持有 | MA20 上行 + 价格站上 MA20 + MACD 多头 + RSI 40-70 | `screen trend` |
+| **⚡ 突破信号** | 突破入场 | 收盘价突破 20 日新高 + 量比 > 1.5 + 非过度拉升 | `screen breakout` |
+| **🔄 回调买入** | 回调低吸 | 上升趋势 + 近 3 日回调 + 缩量 + 回踩 MA10/MA20 | `screen pullback` |
+| **🔥 动量排名** | 强者恒强 | 近 20 日涨幅最强 + RSI 50-70 + 放量 | `screen momentum` |
+
+```bash
+# CLI 使用
+python main.py screen trend 30      # 趋势跟踪 Top30
+python main.py screen breakout 10   # 突破信号 Top10
+python main.py screen momentum 20   # 动量排名 Top20
+
+# 浏览器使用
+# 信号 Tab → 工具栏策略下拉框 → 选策略 → 排行榜实时切换
+```
+
+**策略与信号系统的区别**：
+- 信号系统：综合五维评分（0-100 分），适合全面评估
+- 策略筛选：按特定交易逻辑精准筛选，适合发现特定形态的股票
+
+### 7. 定时任务
 
 ```bash
 # 常驻调度（4 个定时任务）
@@ -199,6 +295,41 @@ python -m stock_data_job --once signal
 | 每月 1 日 09:00 | 股池筛选 | 更新股票池 |
 
 任务执行记录写入 `job_runs` 表，可通过 API 查询。
+
+### 8. 🎯 筹码分布系统（CYQ）
+
+**数据源说明**：官方接口 `akshare.stock_cyq_em` 依赖的 `push2his.eastmoney.com` 在本机网络环境下被阻断（TLS 握手即被关闭），因此本系统**本地复现**了东方财富的 CYQCalculator 算法，等价于官方接口输出的全部字段，零网络依赖。
+
+**算法原理**（与东财 JS 完全一致）：
+1. 取当前价往前 **120 个交易日** K 线
+2. 在 `[min(low), max(high)]` 之间按 **150 个价位**分桶
+3. 每根 K 线按当日 OHLC 均价为顶点的**三角分布**注入筹码，注入量 = `三角权重 × min(换手率, 1)`；历史筹码按 `(1-换手率)` 衰减（模拟获利盘卖出）
+4. 由分布推导：**获利比例** / **平均成本** / **90·70 集中度** / **成本区间**
+
+**衍生字段**：
+- `profit_ratio` 获利比例：当前价下方筹码占比（<30% 视为底部）
+- `avg_cost` 平均成本：累计 50% 筹码对应价位
+- `concentration_90/70` 集中度：`(高-低)/(高+低)`，越小越集中
+
+**评分集成**（独立调整分 ±5，不改变五维权重）：
+| 标签 | 条件 | 调整分 |
+|------|------|--------|
+| 🔒 筹码锁定 | 获利比例 <30% 且 90集中度 <15% | **+5** |
+| 📊 筹码收敛 | 获利比例 <50% 且 90集中度 <20% | +2 |
+| ⚠️ 获利盘堆积 | 获利比例 >85% | **-5** |
+| 筹码分散 | 其它 | 0 |
+
+**CLI 用法**：
+```bash
+python main.py fetch_chip              # 全部股票，近 90 天
+python main.py fetch_chip 600519       # 指定股票
+python main.py fetch_chip 600519 30    # 指定股票 + 最近 30 天
+```
+
+**前端展示**：信号详情面板内嵌「筹码分布」section，含：
+- 🎯 筹码分布横向柱状图（绿=获利盘/红=套牢盘，标注均成本、90 上下沿）
+- 📊 获利比例 + 90/70 集中度趋势折线（含 30%/85% 阈值线）
+- 📇 最新筹码摘要卡（标签 + 关键指标 + 「重新计算」按钮）
 
 ## Web API
 
@@ -228,6 +359,15 @@ python -m web_api
 - `GET /api/signals/{code}/history` — 信号历史
 - `POST /api/signals/scan` — 手动触发信号扫描
 
+**策略**：
+- `GET /api/strategies` — 支持的策略列表
+- `GET /api/strategy/{name}/screen` — 运行策略筛选（`top_n` 参数）
+
+**筹码分布**：
+- `GET /api/stocks/{code}/chip?days=90&with_dist=false` — 筹码历史（`with_dist=true` 返回分布数组）
+- `GET /api/stocks/{code}/chip/latest` — 最新一条筹码摘要
+- `POST /api/stocks/{code}/chip/refresh` — 计算并入库（`{days: 90}`）
+
 **任务**：
 - `POST /api/jobs/fetch` — 手动触发数据拉取
 - `GET /api/jobs/runs` — 任务执行记录
@@ -254,7 +394,8 @@ python -m web_api
 
 **✨ 信号 Tab**
 - 筛选工具栏（日期 / 标签 / 最低分滑块 / 搜索 / 扫描按钮）
-- 汇总卡片（强烈关注/值得关注/中性观察/暂不参与 计数）
+- **策略下拉框**：综合评分 / 趋势跟踪 / 突破信号 / 回调买入 / 动量排名（切换后排行榜实时更新）
+- 汇总卡片（强烈关注/值得关注/中性观察/暂不参与 计数，策略模式显示命中数）
 - 排行榜表格（评分进度条 + 量比/量价趋势/MACD 配色 + 列头排序）
 - **点击行展开详情面板**：
   - 评分仪表盘 Gauge（分段色）
@@ -324,7 +465,7 @@ POOL_CRON=0 9 1 * *
 ## 测试
 
 ```bash
-# 全量测试
+# 全量测试（155 个）
 python -m pytest tests/
 
 # 量价引擎测试（31 个）
@@ -332,9 +473,15 @@ python -m pytest tests/test_volume_engine.py
 
 # 评分器测试（77 个）
 python -m pytest tests/test_signal_scorer.py
+
+# 筹码引擎测试（19 个）
+python -m pytest tests/test_chip_engine.py
+
+# 股池粗筛器测试（16 个）
+python -m pytest tests/test_pool_screener.py
 ```
 
-测试策略：核心算法（量价指标计算、评分规则）全覆盖离线单测，编排层手动验收。
+测试策略：核心算法（量价指标计算、评分规则、CYQ 筹码分布、粗筛条件解析）全覆盖离线单测，编排层手动验收。
 
 ## 技术栈
 

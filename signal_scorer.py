@@ -21,7 +21,7 @@ from config import (
     SIGNAL_MIN_SCORE, SIGNAL_W_VOL_PRICE, SIGNAL_W_TREND,
     SIGNAL_W_MOMENTUM, SIGNAL_W_ANOMALY, SIGNAL_W_INTRADAY,
 )
-from db import query_daily, query_minute, get_engine
+from db import query_daily, query_minute, query_chip_latest, get_engine
 
 
 # 涨跌停判定阈值（pct_change%）
@@ -29,6 +29,11 @@ LIMIT_UP_THRESHOLD = 9.8
 
 # 涨停扣分
 LIMIT_UP_PENALTY = 5
+
+# 筹码调整分阈值（chip_bonus 上限 ±5）
+CHIP_BONUS_LOCKED = 5        # 筹码锁定（低获利+高集中）：+5
+CHIP_BONUS_CONVERGE = 2      # 筹码收敛：+2
+CHIP_PENALTY_HEAVY = -5      # 获利盘堆积（顶部压力）：-5
 
 
 # ============ §8.1 量价配合（满分30） ============
@@ -282,6 +287,39 @@ def _score_intraday(ind: dict) -> float:
     return score
 
 
+# ============ 筹码维度（独立调整分，不改变五维权重）============
+
+def _score_chip(chip: Optional[dict]) -> tuple:
+    """根据筹码指标返回 (bonus, label)。
+
+    筹码数据缺失返回 (0, '')，不影响主评分。
+    逻辑:
+      - 获利比例 < 0.30 且 集中度 < 0.15: 筹码锁定 → +5（套牢压力小+集中度高，潜在底部）
+      - 获利比例 < 0.50 且 集中度 < 0.20: 筹码收敛 → +2（上方压力较轻）
+      - 获利比例 > 0.85:                   获利盘堆积 → -5（顶部压力区）
+      - 其它:                              中性 → 0
+    """
+    if not chip:
+        return 0.0, ""
+    profit = chip.get("profit_ratio")
+    conc = chip.get("concentration_90")
+    if profit is None or conc is None:
+        return 0.0, ""
+
+    import chip_engine
+    avg_cost = chip.get("avg_cost") or 0
+    close = chip.get("_close") or avg_cost or 0
+    label, _ = chip_engine.chip_signal_label(profit, conc, avg_cost, close)
+
+    if label == "筹码锁定":
+        return CHIP_BONUS_LOCKED, label
+    if label == "筹码收敛":
+        return CHIP_BONUS_CONVERGE, label
+    if label == "获利盘堆积":
+        return CHIP_PENALTY_HEAVY, label
+    return 0.0, label
+
+
 # ============ §8.6 标签映射 ============
 
 def map_label(score: float) -> tuple:
@@ -462,12 +500,29 @@ def score_stock(stock_code: str, signal_date: Optional[date] = None,
         "anomaly": s_anomaly, "intraday": s_intraday,
     }
 
+    # —— 筹码维度（独立调整分，不改变五维权重）——
+    # 优先使用 DB 已计算的最新筹码数据；缺失则在线计算
+    chip = query_chip_latest(stock_code)
+    if chip is None:
+        try:
+            import chip_engine
+            chip = chip_engine.latest_chip_summary(df)
+        except Exception:
+            chip = None
+    if chip:
+        # 附带 close 供标签计算用
+        chip = dict(chip)
+        chip["_close"] = float(last["close"])
+    chip_bonus, chip_label = _score_chip(chip)
+    total = max(0, min(100, total + chip_bonus))
+
     # —— 涨停扣分 ——
     if limit_up:
         total = max(0, total - LIMIT_UP_PENALTY)
 
     label, action = map_label(total)
-    reason = build_reason(scores, ind)
+    reason = build_reason(scores, ind, chip_label=chip_label,
+                          chip=chip, chip_bonus=chip_bonus)
 
     return {
         "signal_date": signal_date,
@@ -492,6 +547,12 @@ def score_stock(stock_code: str, signal_date: Optional[date] = None,
         "vwap": intraday.get("vwap"),
         "vwap_deviation": ind["vwap_deviation"],
         "tail_concentration": ind["tail_concentration"],
+        # 筹码维度
+        "chip_profit_ratio": (chip or {}).get("profit_ratio"),
+        "chip_concentration": (chip or {}).get("concentration_90"),
+        "chip_avg_cost": (chip or {}).get("avg_cost"),
+        "chip_label": chip_label or None,
+        "chip_bonus": round(chip_bonus, 2),
         # 分项得分
         "score_vol_price": round(s_vol_price, 2),
         "score_trend": round(s_trend, 2),
@@ -525,7 +586,8 @@ def _macd_signal_label(ind: dict) -> str:
     return "红柱" if hist > 0 else "绿柱"
 
 
-def build_reason(scores: dict, ind: dict) -> str:
+def build_reason(scores: dict, ind: dict, chip_label: str = "",
+                 chip: Optional[dict] = None, chip_bonus: float = 0.0) -> str:
     """根据分项得分和指标值，生成自然语言信号理由。"""
     parts = []
 
@@ -577,6 +639,15 @@ def build_reason(scores: dict, ind: dict) -> str:
     # 风险
     if ind.get("limit_up"):
         parts.append(f"⚠ 涨停风险：当日涨幅已达 {ind.get('pct_change', 0):.1f}%，注意追高风险")
+
+    # 筹码
+    if chip_label and chip:
+        profit = chip.get("profit_ratio")
+        conc = chip.get("concentration_90")
+        if profit is not None and conc is not None:
+            bonus_txt = f"（{chip_bonus:+.0f}分）" if chip_bonus else ""
+            parts.append(f"{chip_label}：获利盘{profit*100:.0f}%、"
+                         f"集中度{conc*100:.1f}%{bonus_txt}")
 
     return "，".join(parts) + ("。" if parts else "")
 

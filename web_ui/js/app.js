@@ -1,12 +1,14 @@
 /**
  * 页面逻辑：选股 → 拉数据 → 渲染图表 + 概览 + 任务面板
  */
-import { fetchStocks, fetchStockList, fetchStockInfo, fetchDaily, fetchAnalyze, fetchJobRuns, triggerFetch } from './api.js';
+import { fetchStocks, fetchStockList, fetchStockInfo, fetchDaily, fetchAnalyze, fetchJobRuns, triggerFetch, triggerFetchChip } from './api.js';
 import { renderChart } from './charts.js';
 import { fmtPrice, fmtPct, fmtTime } from './format.js';
 import { loadPools } from './pools.js';
 import { loadSignals } from './signals.js';
+import { loadFunnel } from './funnel.js';
 import { decorateStatic, initTooltipEvents } from './glossary.js';
+import { renderChipSection, renderChipPlaceholder } from './chips.js';
 
 let chart = null;
 let allStocks = [];  // 全量股票（含详情），用于筛选
@@ -60,6 +62,7 @@ function renderStockOptions(stocks) {
 
 /** 按筛选条件过滤股票 */
 function applyFilters() {
+  const kw = (document.getElementById('filterKeyword').value || '').trim().toLowerCase();
   const ex = document.getElementById('filterExchange').value;
   const ind = document.getElementById('filterIndustry').value;
   const mv = document.getElementById('filterMv').value;
@@ -77,6 +80,8 @@ function applyFilters() {
   };
 
   const filtered = allStocks.filter(s => {
+    // 关键词：匹配代码或名称
+    if (kw && !`${s.stock_code} ${s.stock_name || ''}`.toLowerCase().includes(kw)) return false;
     if (ex && s.exchange !== ex) return false;
     if (ind && s.industry !== ind) return false;
     if (mv && !inRange(s.total_mv, mv)) return false;
@@ -89,23 +94,27 @@ function applyFilters() {
 
   renderStockOptions(filtered);
   document.getElementById('filterCount').textContent =
-    `共 ${filtered.length} / ${allStocks.length} 只`;
+    kw ? `共 ${filtered.length} 只` : `共 ${filtered.length} / ${allStocks.length} 只`;
   renderFilterResult(filtered);
+  openFilterDrawer();   // 筛选后弹出抽屉
+}
+
+/** 筛选结果抽屉开关 */
+function openFilterDrawer() {
+  document.getElementById('filterResult').classList.remove('hidden');
+  document.getElementById('filterOverlay').classList.remove('hidden');
+}
+function closeFilterDrawer() {
+  document.getElementById('filterResult').classList.add('hidden');
+  document.getElementById('filterOverlay').classList.add('hidden');
 }
 
 /** 渲染筛选结果表格 */
 function renderFilterResult(stocks) {
   const tbody = document.getElementById('filterResultBody');
   const countEl = document.getElementById('filterResultCount');
-  const kw = (document.getElementById('filterSearch')?.value || '').trim().toLowerCase();
 
-  // 搜索框二次过滤
   let rows = stocks;
-  if (kw) {
-    rows = stocks.filter(s =>
-      `${s.stock_code} ${s.stock_name || ''}`.toLowerCase().includes(kw));
-  }
-
   countEl.textContent = `共 ${rows.length} 只`;
 
   // 限制渲染数量（性能）
@@ -135,16 +144,13 @@ function renderFilterResult(stocks) {
     tbody.innerHTML += `<tr><td colspan="9" class="signal-hint">仅显示前 ${LIMIT} 条，请用搜索框缩小范围（共 ${rows.length} 条）</td></tr>`;
   }
 
-  // 点击行 → 选中该股票并加载
+  // 点击行 → 选中该股票并加载，然后关闭抽屉
   tbody.querySelectorAll('tr[data-code]').forEach(tr => {
     tr.addEventListener('click', () => {
       const code = tr.dataset.code;
       document.getElementById('stockSelect').value = code;
       loadStock(code);
-      // 收起筛选结果
-      document.getElementById('filterResult').classList.add('hidden');
-      document.getElementById('filterBar').classList.add('hidden');
-      document.getElementById('filterToggleBtn').classList.remove('active');
+      closeFilterDrawer();
     });
   });
 }
@@ -158,6 +164,8 @@ async function loadStock(code) {
   renderChart(chart, daily);
   renderOverview(report);
   renderStockInfo(info);
+  // 筹码分布：行情页默认折叠条，点击展开（避免遮挡 K 线图）
+  renderChipPlaceholder(document.getElementById('marketChipSection'), code);
 }
 
 /** 渲染顶部栏股票信息：名称 + 交易所(板块) + 市值 + 估值 */
@@ -263,6 +271,31 @@ async function doFetch(type) {
   }
 }
 
+/** 触发筹码分布计算：默认仅算当前选中的股票 */
+async function doFetchChip() {
+  const code = document.getElementById('stockSelect').value;
+  const btn = document.getElementById('fetchChipBtn');
+  const old = btn.textContent;
+  btn.disabled = true;
+  btn.textContent = '计算中…';
+  try {
+    const res = await triggerFetchChip(code ? [code] : null, 90);
+    if (res.errors && res.errors.length) {
+      alert(`完成，但有 ${res.errors.length} 个错误\n首条：${JSON.stringify(res.errors[0])}`);
+    } else {
+      alert(`✅ 筹码计算完成：共 ${res.count} 只股票，${res.rows} 条记录`);
+    }
+    await loadJobRuns();
+    // 刷新当前行情页筹码展示（重置为折叠态，用户可重新点开看新数据）
+    if (code) renderChipPlaceholder(document.getElementById('marketChipSection'), code);
+  } catch (e) {
+    alert('筹码计算失败：' + e.message);
+  } finally {
+    btn.disabled = false;
+    btn.textContent = old;
+  }
+}
+
 async function init() {
   initChart();
   initTooltipEvents();   // 绑定全局 tooltip 事件委托（一次即可）
@@ -275,34 +308,35 @@ async function init() {
     loadStock(sel.value));
   document.getElementById('fetchDailyBtn').addEventListener('click', () => doFetch('daily'));
   document.getElementById('fetchMinuteBtn').addEventListener('click', () => doFetch('minute'));
+  document.getElementById('fetchChipBtn').addEventListener('click', () => doFetchChip());
 
-  // 筛选器：折叠/展开 + 实时过滤
-  const filterBar = document.getElementById('filterBar');
-  const filterResult = document.getElementById('filterResult');
-  const filterToggle = document.getElementById('filterToggleBtn');
-  filterToggle.addEventListener('click', () => {
-    const willShow = filterBar.classList.contains('hidden');
-    filterBar.classList.toggle('hidden');
-    filterResult.classList.toggle('hidden');
-    filterToggle.classList.toggle('active');
-    if (willShow) applyFilters();  // 展开时触发首次筛选
+  // 搜索框：回车触发搜索
+  document.getElementById('filterKeyword').addEventListener('keydown', e => {
+    if (e.key === 'Enter') applyFilters();
   });
+  // 更多条件：展开/收起高级筛选
+  document.getElementById('filterMoreBtn').addEventListener('click', () => {
+    const adv = document.getElementById('filterAdvanced');
+    const btn = document.getElementById('filterMoreBtn');
+    const willShow = adv.classList.contains('hidden');
+    adv.classList.toggle('hidden');
+    btn.classList.toggle('expanded', willShow);
+  });
+  // 高级筛选条件变化实时过滤 + 搜索按钮
   ['filterExchange', 'filterIndustry', 'filterMv', 'filterPe', 'filterPb',
    'filterPct', 'filterTurnover'].forEach(id => {
     document.getElementById(id).addEventListener('change', applyFilters);
   });
-  // 结果区搜索框实时过滤
-  document.getElementById('filterSearch').addEventListener('input', () => {
-    // 基于当前筛选条件重新过滤（复用 applyFilters）
-    applyFilters();
-    // 但搜索框的值在 applyFilters 内部会读取
-  });
+  document.getElementById('filterSearchBtn').addEventListener('click', applyFilters);
+  // 抽屉关闭：关闭按钮 + 点遮罩
+  document.getElementById('filterDrawerClose').addEventListener('click', closeFilterDrawer);
+  document.getElementById('filterOverlay').addEventListener('click', closeFilterDrawer);
   document.getElementById('filterResetBtn').addEventListener('click', () => {
+    document.getElementById('filterKeyword').value = '';
     ['filterExchange', 'filterIndustry', 'filterMv', 'filterPe', 'filterPb',
      'filterPct', 'filterTurnover'].forEach(id => {
       document.getElementById(id).value = '';
     });
-    document.getElementById('filterSearch').value = '';
     applyFilters();
   });
   // 给筛选结果表头加术语注释
@@ -315,8 +349,16 @@ async function init() {
       document.querySelectorAll('.tab').forEach(b => b.classList.toggle('active', b === btn));
       document.querySelectorAll('.tab-panel').forEach(p =>
         p.classList.toggle('hidden', p.id !== 'tab-' + name));
+      // 离开行情页时收起筛选栏 + 关闭结果抽屉
+      if (name !== 'market') {
+        document.getElementById('filterBar').classList.add('hidden');
+        closeFilterDrawer();
+      } else {
+        document.getElementById('filterBar').classList.remove('hidden');
+      }
       if (name === 'pools') loadPools();
       if (name === 'signals') loadSignals();
+      if (name === 'funnel') loadFunnel();
     });
   });
 
@@ -329,10 +371,9 @@ async function init() {
     if (sel.value === code) {
       loadStock(code);
     } else {
-      // 股票不在下拉框（非 stocks 表），临时拉取
-      fetchDaily(code).then(daily => {
-        renderChart(chart, daily);
-      });
+      // 股票不在下拉框（非 stocks 表），临时拉取 K线 + 筹码
+      fetchDaily(code).then(daily => renderChart(chart, daily));
+      renderChipPlaceholder(document.getElementById('marketChipSection'), code);
     }
   };
 

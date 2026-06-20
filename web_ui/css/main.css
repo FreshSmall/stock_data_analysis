@@ -52,6 +52,25 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
 }
 #chart { position: absolute; inset: 0; }
 
+/* 行情页主区：K线图 + 筹码区 纵向并列 */
+.market-main {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-width: 0;
+  min-height: 0;
+}
+.market-main .chart-area {
+  flex: 0 0 62%;        /* K 线图固定占 62%，至少 360px */
+  min-height: 360px;
+}
+.market-main .market-chip-wrap {
+  flex: 1 1 auto;       /* 筹码区占剩余高度 */
+  min-height: 0;
+  overflow-y: auto;     /* 内容超出时滚动 */
+}
+
 /* ===== 侧栏 ===== */
 .sidebar {
   width: 320px;
@@ -410,6 +429,57 @@ th .help-icon { width: 14px; height: 14px; font-size: 10px; }
   font-size: 12.5px;
 }
 .filter-bar.hidden { display: none; }
+.filter-bar > .filter-count { margin-left: auto; }  /* 数量+重置推到最右 */
+.filter-bar .filter-stock-label { margin-left: auto; }  /* 股票下拉框推到最右 */
+.filter-search-btn {
+  padding: 4px 12px;
+  background: #3a3d41;
+  color: #ddd;
+  border: 1px solid #555;
+  border-radius: 3px;
+  cursor: pointer;
+}
+.filter-search-btn:hover { background: #4a4d51; }
+
+/* 搜索框（代码/名称）*/
+.filter-keyword-input {
+  flex: 0 1 280px;
+  padding: 5px 10px;
+  background: #1e1e1e;
+  color: #ddd;
+  border: 1px solid #444;
+  border-radius: 3px;
+  font-size: 12.5px;
+}
+.filter-keyword-input:focus { outline: none; border-color: #4fc3f7; }
+
+/* 更多条件按钮 */
+.filter-more-btn {
+  padding: 4px 10px;
+  background: transparent;
+  color: #aaa;
+  border: 1px solid #444;
+  border-radius: 3px;
+  cursor: pointer;
+  font-size: 12.5px;
+}
+.filter-more-btn:hover { background: #333; color: #ddd; }
+.filter-more-btn .arrow { display: inline-block; transition: transform 0.2s; font-size: 10px; }
+.filter-more-btn.expanded .arrow { transform: rotate(90deg); }
+
+/* 高级筛选区（折叠）*/
+.filter-advanced {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 14px;
+  width: 100%;
+  padding: 8px 0 0;
+  margin-top: 4px;
+  border-top: 1px dashed #3a3a3a;
+}
+.filter-advanced.hidden { display: none; }
+/* 隐藏的下拉框（仅作状态存储）*/
+.hidden-stock-select { display: none; }
 .filter-bar label {
   display: flex; align-items: center; gap: 4px;
   color: #888; white-space: nowrap;
@@ -430,32 +500,72 @@ th .help-icon { width: 14px; height: 14px; font-size: 10px; }
 }
 .filter-bar .help-icon { width: 12px; height: 12px; font-size: 9px; }
 
-/* ===== 筛选结果表格 ===== */
-.filter-result {
+/* ===== 筛选结果抽屉（右侧浮层，不挤压 K 线图）===== */
+.filter-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.4);
+  z-index: 90;
+  opacity: 1;
+  transition: opacity 0.2s;
+}
+.filter-overlay.hidden { display: none; }
+
+.filter-result-drawer {
+  position: fixed;
+  top: 0; right: 0; bottom: 0;
+  width: 460px;
+  max-width: 90vw;
   background: #1e1e1e;
-  border-bottom: 1px solid #333;
-  flex-shrink: 0;
-  max-height: 50vh;
+  border-left: 1px solid #333;
+  box-shadow: -4px 0 16px rgba(0, 0, 0, 0.5);
+  z-index: 100;
   display: flex;
   flex-direction: column;
+  transform: translateX(0);
+  transition: transform 0.25s ease;
 }
-.filter-result.hidden { display: none; }
-.filter-result-toolbar {
+.filter-result-drawer.hidden {
+  display: flex;
+  transform: translateX(100%);
+  pointer-events: none;
+  visibility: hidden;
+}
+.drawer-header {
   display: flex;
   align-items: center;
-  gap: 12px;
-  padding: 6px 20px;
+  justify-content: space-between;
+  padding: 12px 16px;
   border-bottom: 1px solid #2a2a2a;
+  flex-shrink: 0;
 }
+.drawer-title { color: #ddd; font-size: 14px; font-weight: 600; }
+.drawer-title em { color: #888; font-style: normal; font-weight: 400; margin-left: 6px; }
+.drawer-close {
+  background: transparent;
+  color: #888;
+  border: none;
+  font-size: 18px;
+  cursor: pointer;
+  padding: 2px 8px;
+  border-radius: 3px;
+  line-height: 1;
+}
+.drawer-close:hover { background: #333; color: #ddd; }
+
 .filter-result-wrap {
   overflow: auto;
   flex: 1;
 }
+/* 抽屉内表格紧凑化 */
+.filter-result-drawer .pool-table { font-size: 12px; }
+.filter-result-drawer .pool-table th,
+.filter-result-drawer .pool-table td { padding: 5px 8px; }
 /* 复用 pool-table/signal-table 样式，行 hover + 可点击 */
-.filter-result .pool-table tbody tr {
+.filter-result-drawer .pool-table tbody tr {
   cursor: pointer;
 }
-.filter-result .pool-table tbody tr:hover {
+.filter-result-drawer .pool-table tbody tr:hover {
   background: #2d2d2e;
 }
 
@@ -463,4 +573,132 @@ th .help-icon { width: 14px; height: 14px; font-size: 10px; }
 .stock-info .industry-tag {
   background: #2d5a2d;
   color: #8c8;
+}
+
+/* ===== 漏斗筛选页 ===== */
+.funnel-panel { padding: 14px 18px; overflow-y: auto; height: 100%; }
+.funnel-toolbar {
+  display: flex; align-items: center; gap: 14px; flex-wrap: wrap;
+  margin-bottom: 16px;
+}
+.funnel-toolbar select { background: #1e1e1e; color: #ddd; border: 1px solid #444;
+  border-radius: 3px; padding: 3px 6px; font-size: 12.5px; }
+.funnel-run-controls { margin-left: auto; display: flex; align-items: center; gap: 8px; }
+.funnel-run-btn { padding: 4px 12px; background: #2d4a2d !important; color: #8c8 !important;
+  border: 1px solid #3d6a3d; border-radius: 3px; cursor: pointer; font-size: 12.5px; }
+.funnel-run-btn:hover:not(:disabled) { background: #3d6a3d !important; }
+.funnel-section { margin-bottom: 18px; }
+.funnel-section h4 { color: #ddd; margin-bottom: 8px; font-size: 14px; }
+.funnel-chart-box { height: 260px; background: #181818; border-radius: 4px; padding: 6px; }
+
+/* 层级切换按钮组 */
+.funnel-layer-tabs { display: flex; gap: 8px; flex-wrap: wrap; }
+.funnel-layer-btn {
+  padding: 5px 12px; background: #2a2a2b; color: #aaa;
+  border: 1px solid #444; border-radius: 3px; cursor: pointer;
+  font-size: 12.5px;
+}
+.funnel-layer-btn:hover { background: #333; color: #ddd; }
+.funnel-layer-btn.active { background: #1a3a5a; color: #4fc3f7; border-color: #4fc3f7; }
+
+/* 漏斗表格 */
+.funnel-table { font-size: 12px; }
+.funnel-table th, .funnel-table td { padding: 5px 8px; }
+.funnel-table tbody tr { cursor: pointer; }
+.funnel-table tbody tr:hover { background: #2d2d2e; }
+.funnel-table .score-cell { color: #f5a623; font-weight: 600; text-align: right; }
+.funnel-table .reason-cell { color: #888; font-size: 11px; max-width: 280px; }
+
+/* 执行历史 */
+.funnel-history-row {
+  display: flex; align-items: center; gap: 12px;
+  padding: 6px 10px; border-radius: 3px; cursor: pointer;
+  font-size: 12.5px; border-left: 3px solid transparent;
+}
+.funnel-history-row:hover { background: #2a2a2b; }
+.funnel-history-row.active { background: #1a2a3a; border-left-color: #4fc3f7; }
+.funnel-history-date { color: #4fc3f7; font-weight: 600; min-width: 90px; }
+.funnel-history-preset { color: #ddd; min-width: 70px; }
+.funnel-history-layers { color: #888; }
+.funnel-history-item { display: inline-block; }
+
+.funnel-empty { text-align: center; padding: 40px 0; }
+.funnel-empty .signal-hint { margin-bottom: 8px; }
+
+/* 概览卡内的股票详情（紧凑纵向） */
+.stock-info-card {
+  flex-direction: row;
+  flex-wrap: wrap;
+  gap: 6px 10px;
+  padding: 8px 10px;
+  margin-bottom: 8px;
+  background: #252526;
+  border-radius: 4px;
+  border-left: 3px solid #4fc3f7;
+  max-width: none;
+}
+.stock-info-card .info-name { font-size: 15px; }
+.stock-info-card:empty { display: none; }   /* 无数据时不占位 */
+
+/* ===== 筹码分布 section ===== */
+.market-chip-wrap {
+  padding: 8px 12px;
+  background: #1e1e1e;
+  border-radius: 4px;
+}
+.market-chip-wrap .signal-hint { color: #888; padding: 6px 0; }
+.market-chip-wrap .chart-title { margin-top: 0; }
+
+/* 筹码折叠条（行情页默认态） */
+.chip-toggle-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 12px;
+  background: #252526;
+  border-radius: 4px;
+  cursor: pointer;
+  user-select: none;
+  transition: background 0.15s;
+}
+.chip-toggle-bar:hover { background: #2d2d30; }
+.chip-toggle-bar .chip-toggle-title {
+  color: #ddd; font-size: 13px; font-weight: 600;
+}
+.chip-toggle-bar .chip-toggle-arrow {
+  color: #888; font-size: 11px; transition: transform 0.2s;
+}
+.chip-toggle-bar.expanded .chip-toggle-arrow { transform: rotate(90deg); }
+.chip-toggle-body { margin-top: 8px; }
+
+.signal-chips-grid { display: flex; gap: 10px; margin-bottom: 10px; }
+.signal-chips-grid .signal-chart-box-wrap {
+  flex: 1; display: flex; flex-direction: column; min-width: 0;
+}
+.signal-chips-grid .signal-chart-box {
+  flex: 1; background: #181818; border-radius: 4px; min-height: 260px;
+}
+.chip-summary { margin-bottom: 10px; }
+.chip-card {
+  background: #252526; border-radius: 4px; padding: 10px 14px;
+  border-left: 3px solid #555;
+}
+.chip-card.chip-good { border-left-color: #22b14c; }
+.chip-card.chip-warn { border-left-color: #ef4136; }
+.chip-card.chip-neutral { border-left-color: #888; }
+.chip-card-label {
+  font-size: 14px; font-weight: 600; color: #ddd; margin-bottom: 6px;
+}
+.chip-card.chip-good .chip-card-label { color: #6fdc6f; }
+.chip-card.chip-warn .chip-card-label { color: #ff7a72; }
+.chip-card-rows { display: grid; grid-template-columns: 1fr 1fr; gap: 4px 18px; font-size: 12px; color: #aaa; }
+.chip-card-rows b { color: #eee; font-weight: 600; }
+.chip-refresh-btn {
+  background: #2d4a2d !important; color: #8c8 !important;
+  border: 1px solid #3d6a3d;
+}
+.chip-refresh-btn:hover:not(:disabled) { background: #3d6a3d !important; }
+@media (max-width: 900px) {
+  .signal-chips-grid { flex-direction: column; }
+  .chip-card-rows { grid-template-columns: 1fr; }
 }

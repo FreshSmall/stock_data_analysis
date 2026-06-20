@@ -4,13 +4,14 @@
  */
 import {
   fetchSignals, fetchSignalDetail, fetchSignalHistory, triggerScan,
-  fetchDaily,
+  fetchDaily, runStrategy,
 } from './api.js';
 import {
-  fmtPrice, scoreClass, labelBadge, volRatioClass, volPriceClass,
+  fmtPrice, scoreClass, labelBadge, volRatioClass, volPriceClass, volPriceLabel,
   macdClass, fmtVwapDev, fmtDate,
 } from './format.js';
 import { helpIcon, decorateStatic } from './glossary.js';
+import { renderChipSection, disposeChipCharts } from './chips.js';
 
 // ===== 模块状态 =====
 const state = {
@@ -71,6 +72,50 @@ function initToolbar() {
   // 扫描按钮
   const scanBtn = document.getElementById('signalScanBtn');
   scanBtn.addEventListener('click', doScan);
+
+  // 策略切换
+  document.getElementById('signalStrategy').addEventListener('change', (e) => {
+    const strategy = e.target.value;
+    if (strategy) {
+      loadStrategyResult(strategy);
+    } else {
+      refreshList();  // 切回综合评分
+    }
+  });
+}
+
+/** 加载策略筛选结果，替换排行榜数据 */
+async function loadStrategyResult(strategy) {
+  const tbody = document.getElementById('signalBody');
+  tbody.innerHTML = '<tr><td colspan="11" class="signal-hint">策略筛选中…</td></tr>';
+  document.getElementById('signalSummary').innerHTML = '';
+  try {
+    const res = await runStrategy(strategy, 100);
+    // 将策略结果转换为与信号排行兼容的数据结构（含指标字段）
+    state.rows = res.results.map(r => ({
+      stock_code: r.stock_code,
+      stock_name: r.stock_name || null,
+      score: r.score,
+      label: r.match ? '策略命中' : '策略关注',
+      vol_ratio: r.vol_ratio ?? null,
+      vol_price_trend: r.vol_price_trend || null,
+      macd_signal: r.macd_signal || null,
+      rsi_value: r.rsi_value ?? null,
+      vwap_deviation: r.vwap_deviation ?? null,
+      reason: r.reason,
+      signal_date: null,
+    }));
+    // 策略汇总
+    document.getElementById('signalSummary').innerHTML = `
+      <div class="sum-card">
+        <div class="title">🎯 ${res.strategy_name}</div>
+        <div class="count">${res.matched}</div>
+        <div class="pct">命中 / 共扫描 ${res.scanned}</div>
+      </div>`;
+    renderTable();
+  } catch (e) {
+    tbody.innerHTML = `<tr><td colspan="11" class="signal-hint down">策略筛选失败：${e.message}</td></tr>`;
+  }
 }
 
 // ===== 拉取信号列表 =====
@@ -171,7 +216,7 @@ function renderTable() {
         </td>
         <td>${labelBadge(r.label)}</td>
         <td class="${vrCls}">${fmtPrice(r.vol_ratio, 2)}</td>
-        <td class="${vpCls}">${r.vol_price_trend || '-'}</td>
+        <td class="${vpCls}">${volPriceLabel(r.vol_price_trend)}</td>
         <td class="${mcCls}">${r.macd_signal || '-'}</td>
         <td class="rsi-col">${fmtPrice(r.rsi_value, 1)}</td>
         <td class="vwap-col">${fmtVwapDev(r.vwap_deviation)}</td>
@@ -249,6 +294,7 @@ function closeDetail() {
   // 销毁图表实例
   Object.values(state.charts).forEach(c => c && c.dispose && c.dispose());
   state.charts = {};
+  disposeChipCharts();   // 销毁筹码图实例
   document.querySelectorAll('.signal-table tbody tr').forEach(tr =>
     tr.classList.remove('active'));
 }
@@ -284,6 +330,10 @@ function renderDetail(panel, d, history, daily) {
       <h4 data-term="tail_concentration">⏱ 分时成交量分布</h4>
       <div id="signalMinute" style="height:140px"></div>
     </div>
+    <div class="signal-detail-section" id="signalChipSection">
+      <h4 data-term="chip_distribution">🎯 筹码分布</h4>
+      <div class="signal-hint">加载中…</div>
+    </div>
     <div class="signal-detail-section">
       <h4>📝 信号理由</h4>
       <div class="signal-reason">${renderReason(d.reason)}</div>
@@ -315,6 +365,8 @@ function renderDetail(panel, d, history, daily) {
   renderRadar(d);
   renderKline(daily, d, history);
   renderMinuteDist(d);
+  // 筹码分布（异步，独立加载）
+  renderChipSection(panel.querySelector('#signalChipSection'), d.stock_code);
 }
 
 function renderReason(reason) {

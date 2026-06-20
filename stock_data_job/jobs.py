@@ -84,3 +84,28 @@ def job_signal(force: bool = False):
         finish_job_run(run_id, "failed", error=str(e))
         logger.exception("signal 失败")
         raise
+
+
+def job_funnel(force: bool = False):
+    """每周漏斗筛选：粗筛 → 拉日线 → 精筛 → 入库 screen_result
+
+    参数:
+      force: True 时跳过交易日判断（手动调试用）
+    """
+    if not force and not is_trading_day():
+        logger.info("funnel: 非交易日，跳过")
+        return
+
+    run_id = start_job_run("funnel")
+    try:
+        from funnel_runner import run_funnel
+        from config import FUNNEL_PRESET, FUNNEL_STRATEGIES
+        strategies = FUNNEL_STRATEGIES.split(",")
+        result = run_funnel(preset=FUNNEL_PRESET, strategies=strategies)
+        finish_job_run(run_id, "ok", rows=result["final_count"])
+        logger.info("funnel 完成: run_id=%s, 最终 %d 只",
+                    result["run_id"], result["final_count"])
+    except Exception as e:
+        finish_job_run(run_id, "failed", error=str(e))
+        logger.exception("funnel 失败")
+        raise

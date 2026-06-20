@@ -145,6 +145,94 @@ def query_signal_history(stock_code: str, days: int = 60) -> pd.DataFrame:
     return df.sort_values("signal_date").reset_index(drop=True)
 
 
+def query_chip_distribution(stock_code: str, days: int = 90,
+                            with_dist: bool = False) -> pd.DataFrame:
+    """读取某股票最近 N 天筹码分布数据，按日期升序。
+
+    参数:
+      days:      返回最近 N 天
+      with_dist: True 时返回 distribution 列（JSON 字符串），False 时不返回
+    """
+    engine = get_engine()
+    cols = ("trade_date, profit_ratio, avg_cost, cost_90_low, cost_90_high, "
+            "concentration_90, cost_70_low, cost_70_high, concentration_70"
+            + (", distribution" if with_dist else ""))
+    df = pd.read_sql(text(
+        f"SELECT {cols} FROM chip_distribution "
+        f"WHERE stock_code = :code "
+        f"ORDER BY trade_date DESC LIMIT :lim"
+    ), engine, params={"code": stock_code, "lim": days})
+    return df.sort_values("trade_date").reset_index(drop=True)
+
+
+def query_chip_latest(stock_code: str) -> dict:
+    """读取某股票最新一条筹码摘要（不含 distribution），无数据返回 None。"""
+    engine = get_engine()
+    df = pd.read_sql(text(
+        "SELECT trade_date, profit_ratio, avg_cost, cost_90_low, cost_90_high, "
+        "concentration_90, cost_70_low, cost_70_high, concentration_70 "
+        "FROM chip_distribution WHERE stock_code = :code "
+        "ORDER BY trade_date DESC LIMIT 1"
+    ), engine, params={"code": stock_code})
+    if df.empty:
+        return None
+    return df.iloc[0].to_dict()
+
+
+# ============ 漏斗筛选结果 ============
+
+def query_funnel_runs(limit: int = 20) -> pd.DataFrame:
+    """查询漏斗执行历史批次列表（按日期降序）"""
+    engine = get_engine()
+    df = pd.read_sql(text(
+        "SELECT run_id, run_date, preset FROM screen_result "
+        "GROUP BY run_id, run_date, preset "
+        "ORDER BY run_date DESC, run_id DESC LIMIT :lim"
+    ), engine, params={"lim": limit})
+    return df
+
+
+def query_funnel_overview(run_id: str) -> list:
+    """查询某批次的漏斗总览：各层的命中数"""
+    engine = get_engine()
+    df = pd.read_sql(text("""
+        SELECT layer, preset, strategy,
+               COUNT(*) as total,
+               SUM(CASE WHEN `match`=1 OR layer=1 THEN 1 ELSE 0 END) as matched
+        FROM screen_result
+        WHERE run_id = :rid
+        GROUP BY layer, preset, strategy
+        ORDER BY layer, strategy
+    """), engine, params={"rid": run_id})
+    return df.to_dict("records")
+
+
+def query_screen_results(run_id: str, layer: int = None,
+                         preset: str = None, strategy: str = None,
+                         matched_only: bool = False) -> pd.DataFrame:
+    """查询某批次的筛选结果明细"""
+    engine = get_engine()
+    clauses = ["run_id = :rid"]
+    params = {"rid": run_id}
+    if layer is not None:
+        clauses.append("layer = :layer")
+        params["layer"] = layer
+    if preset:
+        clauses.append("preset = :preset")
+        params["preset"] = preset
+    if strategy:
+        clauses.append("strategy = :strategy")
+        params["strategy"] = strategy
+    if matched_only:
+        clauses.append("(layer = 1 OR `match` = 1)")
+    where = " AND ".join(clauses)
+    df = pd.read_sql(text(
+        f"SELECT * FROM screen_result WHERE {where} "
+        f"ORDER BY layer, score DESC, total_mv DESC"
+    ), engine, params=params)
+    return df
+
+
 def get_last_trade_dates(stock_codes: list) -> dict:
     """批量查询多只股票的最后交易日，返回 {stock_code: 'YYYY-MM-DD'}。
     无数据的股票不在返回结果中（用于增量拉取判断起点）。"""

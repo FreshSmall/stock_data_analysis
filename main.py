@@ -14,6 +14,11 @@
   python main.py backtest                      # 回测: 历史扫描+收益回填+报告
   python main.py backfill                      # 回填信号收益率
   python main.py backtest_report               # 生成回测报告
+  python main.py screen trend                  # 量化策略筛选(趋势/突破/回调/动量)
+  python main.py screen breakout 30            # 指定策略+返回数量
+  python main.py fetch_chip                    # 计算全部股票筹码分布(近90天)
+  python main.py fetch_chip 600519             # 指定股票筹码分布
+  python main.py fetch_chip 600519 30          # 指定股票+最近30天
 """
 import sys
 import time
@@ -103,6 +108,51 @@ def do_pool():
     run_pool()
 
 
+def do_fetch_chip(codes: list[str] = None, days: int = 90):
+    """计算并入库筹码分布数据（本地复现 CYQ 算法，不依赖外部接口）
+
+    用法:
+      python main.py fetch_chip              # 股池全部股票，最近 90 天
+      python main.py fetch_chip 600519       # 指定股票
+      python main.py fetch_chip 600519 30    # 指定股票 + 最近 30 天
+    """
+    import time as _t
+    from chip_fetcher import upsert_chip
+    from db import get_engine
+    from sqlalchemy import text
+
+    # 解析参数：codes（位置参数列表）+ days（最后一个数字）
+    if isinstance(codes, list):
+        # 末尾是数字则当作 days
+        if codes and codes[-1].isdigit():
+            days = int(codes.pop())
+        codes = codes or None
+
+    if codes:
+        target_codes = codes
+    else:
+        # 默认取有日线数据的全部股票
+        e = get_engine()
+        with e.connect() as conn:
+            rows = conn.execute(text(
+                "SELECT DISTINCT stock_code FROM daily_prices"
+            )).fetchall()
+        target_codes = [r[0] for r in rows]
+
+    print(f"\n📥 开始计算筹码分布（本地 CYQ 算法），共 {len(target_codes)} 只股票，最近 {days} 天\n")
+    total = 0
+    for i, code in enumerate(target_codes, 1):
+        print(f"  [{i}/{len(target_codes)}] {code} ...", end=" ")
+        try:
+            n = upsert_chip(code, days=days)
+            total += n
+            print(f"✅ {n} 条")
+        except Exception as e:
+            print(f"❌ {e}")
+        _t.sleep(0.05)  # 本地计算，间隔极短
+    print(f"\n✅ 筹码分布计算完成，共 {total} 条记录\n")
+
+
 def do_signal():
     """扫描股池信号并评分入库"""
     from signal_runner import run_daily_signal
@@ -146,6 +196,133 @@ def do_backtest_report():
     print(f"\n📄 报告已生成: {out}")
 
 
+def do_screen(args=None):
+    """量化策略筛选（趋势/突破/回调/动量）
+
+    用法:
+      python main.py screen trend                   # 全部有日线股票
+      python main.py screen trend 30                # 前 30
+      python main.py screen trend --from-pool value # 仅对粗筛"价值蓝筹"的结果精筛
+    """
+    args = args or []
+    from strategy_screener import run_screener, STRATEGIES
+    from db import get_engine
+    from sqlalchemy import text
+
+    # 解析参数：python main.py screen [strategy] [top_n] [--from-pool PRESET]
+    strategy = args[0] if len(args) > 0 else "trend"
+    top_n = 50
+    from_pool = None
+    for a in args[1:]:
+        if a == "--from-pool":
+            idx = args.index(a) + 1
+            from_pool = args[idx] if idx < len(args) else None
+        elif a.startswith("--"):
+            continue
+        elif a.isdigit():
+            top_n = int(a)
+
+    if strategy not in STRATEGIES:
+        print(f"未知策略: {strategy}")
+        print(f"可选: {', '.join(f'{k}({v[0]})' for k, v in STRATEGIES.items())}")
+        return
+
+    # 确定精筛范围
+    if from_pool:
+        from pool_screener import list_codes
+        codes = list_codes(preset=from_pool)
+        print(f"📐 粗筛预设 {from_pool}: {len(codes)} 只候选股")
+    else:
+        e = get_engine()
+        with e.connect() as conn:
+            rows = conn.execute(text("SELECT DISTINCT stock_code FROM daily_prices")).fetchall()
+        codes = [r[0] for r in rows]
+
+    result = run_screener(strategy, codes, top_n=top_n)
+    print(f"\n{'='*70}")
+    print(f"🎯 策略: {result['strategy_name']} | 扫描 {result['scanned']} 只 | 命中 {result['matched']} 只")
+    print(f"{'='*70}")
+    print(f"\nTop {len(result['results'])}:")
+    for i, r in enumerate(result["results"], 1):
+        match_mark = "✅" if r["match"] else "  "
+        extra = f" | 20日涨{r.get('return_20d', 0):+.1f}%" if strategy == "momentum" else ""
+        print(f"  {i:>2}. {match_mark} {r['stock_code']} {r.get('stock_name', ''):<8} "
+              f"得分{r['score']:>5.1f}{extra}")
+        print(f"      └ {r['reason']}")
+    print(f"{'='*70}\n")
+
+
+def do_screen_pool(args=None):
+    """股池基础粗筛（基于市值/PE/PB/换手率等快照指标，零网络开销）
+
+    用法:
+      python main.py screen_pool                         # 列出可用预设
+      python main.py screen_pool value                   # 价值蓝筹
+      python main.py screen_pool growth --top 50         # 成长活跃 前50
+      python main.py screen_pool --custom "total_mv>100,pe>0,turnover>1"
+    """
+    args = args or []
+    from pool_screener import screen_pool, print_screen_result, PRESETS
+
+    # 无参数：列出预设
+    if not args:
+        print("\n📋 可用粗筛预设:")
+        print(f"{'='*60}")
+        for key, p in PRESETS.items():
+            print(f"\n  {key:<14} {p.label}")
+            print(f"  {' '*14} {p.desc}")
+            print(f"  {' '*14} 适用: {', '.join(p.tags)}")
+        print(f"\n{'='*60}")
+        print("\n用法: python main.py screen_pool <预设名> [--top N]")
+        print("      python main.py screen_pool --custom '条件1,条件2'\n")
+        return
+
+    # 解析参数
+    preset = None
+    custom = None
+    top_n = None
+    skip_next = False
+    for i, a in enumerate(args):
+        if skip_next:
+            skip_next = False
+            continue
+        if a == "--custom":
+            custom = args[i + 1] if i + 1 < len(args) else None
+            skip_next = True
+        elif a == "--top":
+            top_n = int(args[i + 1]) if i + 1 < len(args) else None
+            skip_next = True
+        elif not a.startswith("--"):
+            preset = a
+
+    result = screen_pool(preset=preset, custom=custom, top_n=top_n)
+    print_screen_result(result)
+
+
+def do_funnel(args=None):
+    """漏斗筛选：粗筛 → 拉日线 → 精筛 → 入库
+
+    用法:
+      python main.py funnel                    # 默认 value + trend/breakout/momentum
+      python main.py funnel growth             # 指定预设
+      python main.py funnel value trend        # 指定预设+策略
+      python main.py funnel value trend breakout  # 多策略
+    """
+    args = args or []
+    from funnel_runner import run_funnel
+    from pool_screener import PRESETS
+    from strategy_screener import STRATEGIES
+
+    preset = args[0] if args and not args[0].startswith("-") else "value"
+    strategies = [a for a in args[1:] if not a.startswith("-")] or None
+
+    if preset not in PRESETS:
+        print(f"未知预设: {preset}，可选: {list(PRESETS.keys())}")
+        return
+
+    run_funnel(preset=preset, strategies=strategies)
+
+
 COMMANDS = {
     "init":             ("初始化数据库",            do_init),
     "fetch_daily":      ("拉取日线数据",            do_fetch_daily),
@@ -153,10 +330,14 @@ COMMANDS = {
     "analyze":          ("输出分析报告",            do_analyze),
     "run":              ("日常一键: 拉取 + 分析",    do_run),
     "pool":             ("股池筛选并入库",          do_pool),
+    "screen_pool":      ("股池基础粗筛(市值/PE/换手等)", do_screen_pool),
+    "funnel":           ("漏斗筛选(粗筛→精筛→入库)", do_funnel),
+    "fetch_chip":       ("计算并入库筹码分布(本地CYQ算法)", do_fetch_chip),
     "signal":           ("扫描股池信号并评分入库",   do_signal),
     "backtest":         ("回测: 历史扫描+收益回填+报告", do_backtest),
     "backfill":         ("回填信号收益率",          do_backfill),
     "backtest_report":  ("生成回测报告",            do_backtest_report),
+    "screen":           ("量化策略筛选(趋势/突破/回调/动量)", do_screen),
 }
 
 

@@ -61,3 +61,40 @@ def list_runs(limit: int = Query(20, ge=1, le=100)):
         params={"lim": limit},
     )
     return df_records(df)
+
+
+class ChipRequest(BaseModel):
+    """筹码计算请求：codes 留空则计算全部有日线数据的股票"""
+    codes: Optional[List[str]] = None
+    days: int = 90
+
+
+@router.post("/jobs/fetch_chip")
+def trigger_fetch_chip(req: ChipRequest):
+    """手动触发筹码分布计算（本地 CYQ 算法，同步），记 job_runs"""
+    from chip_fetcher import upsert_chip
+
+    # 默认范围：全部有日线数据的股票
+    if req.codes:
+        codes = req.codes
+    else:
+        e = get_engine()
+        with e.connect() as conn:
+            rows = conn.execute(text(
+                "SELECT DISTINCT stock_code FROM daily_prices"
+            )).fetchall()
+        codes = [r[0] for r in rows]
+
+    run_id = start_job_run("job_fetch_chip")
+    total = 0
+    errors = []
+    for code in codes:
+        try:
+            total += upsert_chip(code, days=req.days)
+        except Exception as ex:
+            errors.append({"code": code, "error": str(ex)[:200]})
+
+    status = "ok" if not errors else "failed"
+    finish_job_run(run_id, status, rows=total,
+                   error=str(errors)[:500] if errors else None)
+    return {"run_id": run_id, "rows": total, "count": len(codes), "errors": errors}
