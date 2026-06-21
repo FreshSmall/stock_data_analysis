@@ -7,8 +7,8 @@ from fastapi import APIRouter, Query
 from pydantic import BaseModel
 from sqlalchemy import text
 
-from db import upsert_rows, start_job_run, finish_job_run, get_engine
-from fetcher import fetch_daily, fetch_minute
+from data.db import upsert_rows, start_job_run, finish_job_run, get_engine
+from data.fetchers.akshare_fetcher import fetch_daily, fetch_minute
 from config import STOCK_CODES
 from ..schemas import df_records
 
@@ -72,7 +72,7 @@ class ChipRequest(BaseModel):
 @router.post("/jobs/fetch_chip")
 def trigger_fetch_chip(req: ChipRequest):
     """手动触发筹码分布计算（本地 CYQ 算法，同步），记 job_runs"""
-    from chip_fetcher import upsert_chip
+    from data.chip_fetcher import upsert_chip
 
     # 默认范围：全部有日线数据的股票
     if req.codes:

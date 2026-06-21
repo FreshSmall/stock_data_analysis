@@ -4,7 +4,7 @@ signal_scorer 离线单测 — 5 维计分(§8.1-§8.5) + 标签映射(§8.6)
 """
 import pytest
 
-from signal_scorer import (
+from core.scoring.signal_scorer import (
     _score_vol_price,
     _score_trend,
     _score_momentum,

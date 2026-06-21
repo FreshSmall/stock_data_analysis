@@ -24,9 +24,9 @@ import sys
 import time
 
 from config import STOCK_CODES
-from db import init_db, upsert_rows
-from fetcher import fetch_daily, fetch_minute, fetch_stock_list
-from analyze import print_report
+from data.db import init_db, upsert_rows
+from data.fetchers.akshare_fetcher import fetch_daily, fetch_minute, fetch_stock_list
+from core.indicators.analyze import print_report
 
 
 def do_init():
@@ -36,7 +36,7 @@ def do_init():
 
 def do_fetch_daily(codes: list[str] = None):
     """拉取日线数据（增量：有历史数据的从最后交易日+1开始，无历史的全量回溯）"""
-    from db import get_last_trade_dates
+    from data.db import get_last_trade_dates
     codes = codes or STOCK_CODES
     print(f"\n📥 开始拉取日线数据（增量），共 {len(codes)} 只股票\n")
 
@@ -104,7 +104,7 @@ def do_run():
 
 def do_pool():
     """股池筛选并入库（以今天为期次）"""
-    from a_stock_filter import run_pool
+    from data.pool_builder import run_pool
     run_pool()
 
 
@@ -117,8 +117,8 @@ def do_fetch_chip(codes: list[str] = None, days: int = 90):
       python main.py fetch_chip 600519 30    # 指定股票 + 最近 30 天
     """
     import time as _t
-    from chip_fetcher import upsert_chip
-    from db import get_engine
+    from data.chip_fetcher import upsert_chip
+    from data.db import get_engine
     from sqlalchemy import text
 
     # 解析参数：codes（位置参数列表）+ days（最后一个数字）
@@ -155,13 +155,13 @@ def do_fetch_chip(codes: list[str] = None, days: int = 90):
 
 def do_signal():
     """扫描股池信号并评分入库"""
-    from signal_runner import run_daily_signal
+    from orchestration.signal_runner import run_daily_signal
     run_daily_signal()
 
 
 def do_backtest():
     """回测：历史扫描 + 收益回填 + 报告"""
-    from signal_backtest import (
+    from core.backtest import (
         backtest_signals, backfill_returns, analyze_performance, generate_report_md,
     )
     import os
@@ -180,13 +180,13 @@ def do_backtest():
 
 def do_backfill():
     """仅回填收益率（已跑过回测）"""
-    from signal_backtest import backfill_returns
+    from core.backtest import backfill_returns
     backfill_returns()
 
 
 def do_backtest_report():
     """仅生成报告（基于已有数据）"""
-    from signal_backtest import analyze_performance, generate_report_md
+    from core.backtest import analyze_performance, generate_report_md
     from datetime import date
     import os
     result = analyze_performance()
@@ -205,8 +205,8 @@ def do_screen(args=None):
       python main.py screen trend --from-pool value # 仅对粗筛"价值蓝筹"的结果精筛
     """
     args = args or []
-    from strategy_screener import run_screener, STRATEGIES
-    from db import get_engine
+    from core.screeners.strategy_screener import run_screener, STRATEGIES
+    from data.db import get_engine
     from sqlalchemy import text
 
     # 解析参数：python main.py screen [strategy] [top_n] [--from-pool PRESET]
@@ -229,7 +229,7 @@ def do_screen(args=None):
 
     # 确定精筛范围
     if from_pool:
-        from pool_screener import list_codes
+        from core.screeners.pool_screener import list_codes
         codes = list_codes(preset=from_pool)
         print(f"📐 粗筛预设 {from_pool}: {len(codes)} 只候选股")
     else:
@@ -262,7 +262,7 @@ def do_screen_pool(args=None):
       python main.py screen_pool --custom "total_mv>100,pe>0,turnover>1"
     """
     args = args or []
-    from pool_screener import screen_pool, print_screen_result, PRESETS
+    from core.screeners.pool_screener import screen_pool, print_screen_result, PRESETS
 
     # 无参数：列出预设
     if not args:
@@ -309,9 +309,9 @@ def do_funnel(args=None):
       python main.py funnel value trend breakout  # 多策略
     """
     args = args or []
-    from funnel_runner import run_funnel
-    from pool_screener import PRESETS
-    from strategy_screener import STRATEGIES
+    from orchestration.funnel_runner import run_funnel
+    from core.screeners.pool_screener import PRESETS
+    from core.screeners.strategy_screener import STRATEGIES
 
     preset = args[0] if args and not args[0].startswith("-") else "value"
     strategies = [a for a in args[1:] if not a.startswith("-")] or None

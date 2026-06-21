@@ -2,7 +2,7 @@
 from fastapi import APIRouter, Query
 from sqlalchemy import text
 
-from db import query_daily, query_minute, get_engine
+from data.db import query_daily, query_minute, get_engine
 from config import STOCK_CODES
 from ..schemas import df_records
 

@@ -10,7 +10,7 @@ from fastapi import APIRouter, Query
 from pydantic import BaseModel
 from sqlalchemy import text
 
-from db import query_funnel_runs, query_funnel_overview, query_screen_results, get_engine
+from data.db import query_funnel_runs, query_funnel_overview, query_screen_results, get_engine
 from ..schemas import df_records
 
 router = APIRouter(tags=["funnel"])
@@ -75,7 +75,7 @@ class RunRequest(BaseModel):
 @router.post("/funnel/run")
 def trigger_run(req: RunRequest | None = None):
     """手动触发漏斗筛选"""
-    from funnel_runner import run_funnel
+    from orchestration.funnel_runner import run_funnel
     params = req.model_dump() if req else {}
     result = run_funnel(**params)
     return result

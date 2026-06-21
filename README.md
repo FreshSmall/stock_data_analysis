@@ -63,55 +63,57 @@ python -m web_api
 
 ```
 stock_data_analysis/
-├── .env.example          # 配置模板
-├── requirements.txt      # 依赖
-├── config.py             # 配项加载（DB / 拉取 / 股池 / 信号 / 定时）
+├── main.py                  # CLI 入口（命令分发）
+├── config.py                # 配置加载（DB / 拉取 / 股池 / 信号 / 定时）
+├── .env.example             # 配置模板
+├── requirements.txt         # 依赖
 │
-├── db/                   # 数据库层
-│   ├── connection.py       # 连接管理
-│   ├── schema.py           # 建表（daily/minute/stocks/job_runs/stock_pool/stock_signal/stock_signal_log/chip_distribution）
-│   ├── query.py            # 查询（日线/分钟/股池/信号/筹码）
-│   └── writer.py           # 写入（upsert / job_runs）
+├── core/                    # 🔥 核心业务逻辑（纯算法，无 IO 耦合）
+│   ├── indicators/            # 指标计算
+│   │   ├── analyze.py           # MA / RSI / MACD / 金叉
+│   │   └── volume_engine.py     # 量价分析（量比/OBV/VR/VWAP/异动检测）
+│   ├── screeners/             # 筛选器
+│   │   ├── pool_screener.py     # 基础粗筛（市值/PE/换手等快照指标）
+│   │   └── strategy_screener.py # 策略精筛（趋势/突破/回调/动量）
+│   ├── scoring/               # 评分系统
+│   │   ├── signal_scorer.py     # 5 维加权 0-100 分 + 筹码调整 ±5
+│   │   └── chip_engine.py       # 筹码分布引擎（本地复现 CYQ 算法）
+│   └── backtest.py            # 信号回测（历史扫描 + 收益回填 + 胜率统计）
 │
-├── fetcher.py            # akshare 数据拉取（增量拉取 + 主备切换）
-├── baostock_fetcher.py   # baostock 数据拉取（备选数据源，支持增量）
-├── a_stock_filter.py     # 股池筛选器（新浪行情 + 东财上市日期/行业）
-├── analyze.py            # 技术指标分析（MA/RSI/MACD/金叉）
+├── data/                    # 📥 数据拉取与持久化
+│   ├── fetchers/              # 数据源适配
+│   │   ├── akshare_fetcher.py  # akshare 主源（增量拉取 + 主备切换）
+│   │   └── baostock_fetcher.py # baostock 备源
+│   ├── pool_builder.py        # 股池构建（新浪行情 + 东财上市日期/行业）
+│   ├── batch_fetcher.py       # 批量拉日线（BaoStock 连接复用 + 增量 + 粗筛联动）
+│   ├── chip_fetcher.py        # 筹码数据入库
+│   └── db/                    # 数据库层
+│       ├── connection.py        # 连接管理
+│       ├── schema.py            # 建表（daily/minute/stocks/job_runs/stock_pool/stock_signal/chip_distribution/screen_result）
+│       ├── query.py             # 查询（日线/分钟/股池/信号/筹码/漏斗）
+│       └── writer.py            # 写入（upsert / job_runs）
 │
-├── volume_engine.py      # 🔥 量价分析引擎（量比/OBV/VR/VWAP/异动检测）
-├── signal_scorer.py      # 🔥 综合评分器（5 维加权 0-100 分 + 筹码调整 ±5 + 标签 + 理由）
-├── signal_runner.py      # 🔥 信号扫描编排（股池 → 批量评分 → 入库）
-├── signal_backtest.py    # 🔥 信号回测（历史扫描 + 收益回填 + 胜率统计）
-├── strategy_screener.py  # 🔥 量化策略筛选器（趋势/突破/回调/动量）
-├── pool_screener.py     # 🔄 股池基础粗筛器（市值/PE/换手等快照指标）
-├── batch_fetch_daily.py  # 📥 批量拉日线（BaoStock连接复用+增量+粗筛联动）
-├── chip_engine.py        # 🎯 筹码分布引擎（本地复现东方财富 CYQ 算法）
-├── chip_fetcher.py       # 🎯 筹码数据拉取/入库
+├── orchestration/          # 🎯 编排层（串联 core + data 完成完整业务流程）
+│   ├── signal_runner.py       # 信号扫描编排（股池 → 批量评分 → 入库）
+│   └── funnel_runner.py       # 漏斗筛选编排（粗筛 → 拉日线 → 精筛 → 入库）
 │
-├── stock_data_job/       # 定时任务（APScheduler）
-│   ├── __main__.py         # 入口: python -m stock_data_job
-│   ├── scheduler.py        # 调度器（4 个定时任务）
-│   ├── jobs.py             # 任务函数（日线/分钟/股池/信号）
-│   └── trading_cal.py      # 交易日判断
+├── web/                    # 🌐 Web 服务
+│   ├── api/                   # 后端接口（FastAPI）
+│   │   ├── __main__.py          # 入口: python -m web.api
+│   │   ├── app.py               # FastAPI 应用（含 web/ui 静态托管）
+│   │   ├── schemas.py           # 响应序列化
+│   │   └── routes/              # 路由: stocks / analyze / jobs / pools / signals / strategy / chips / funnel
+│   └── ui/                    # 前端看板（原生 HTML + ECharts）
+│       ├── index.html           # 单页入口（4 个 tab：行情/股池/信号/漏斗）
+│       ├── css/main.css         # 样式（深色主题 + 信号配色）
+│       ├── js/                  # app/charts/pools/signals/funnel/chips/glossary/api/format
+│       └── vendor/              # 本地 vendored echarts.min.js
 │
-├── web_api/              # 后端接口（FastAPI）
-│   ├── __main__.py         # 入口: python -m web_api
-│   ├── app.py              # FastAPI 应用（含 web_ui 静态托管）
-│   ├── schemas.py          # 响应序列化
-│   └── routes/             # 路由: stocks / analyze / jobs / pools / signals / strategy
-│
-├── web_ui/               # 前端看板（原生 HTML + ECharts）
-│   ├── index.html          # 单页入口（3 个 tab）
-│   ├── css/main.css        # 样式（深色主题 + 信号配色）
-│   ├── js/
-│   │   ├── app.js            # 主逻辑（行情 tab + 股票筛选器）
-│   │   ├── charts.js         # K线图渲染
-│   │   ├── pools.js          # 股池 tab
-│   │   ├── signals.js        # 信号 tab（排行榜 + 详情面板）
-│   │   ├── glossary.js       # 术语字典 + tooltip 组件
-│   │   ├── api.js            # API 封装
-│   │   └── format.js         # 格式化工具
-│   └── vendor/               # 本地 vendored echarts.min.js
+├── scheduler/              # ⏰ 定时任务（APScheduler）
+│   ├── __main__.py            # 入口: python -m scheduler
+│   ├── scheduler.py           # 调度器（5 个定时任务）
+│   ├── jobs.py                # 任务函数（日线/分钟/股池/信号/漏斗）
+│   └── trading_cal.py         # 交易日判断
 │
 ├── tests/                # 单元测试
 │   ├── test_volume_engine.py    # 量价引擎 31 测试

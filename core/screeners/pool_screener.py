@@ -27,7 +27,7 @@ from typing import Optional
 import pandas as pd
 from sqlalchemy import text
 
-from db import get_engine
+from data.db import get_engine
 
 
 # ============ §1 预设条件 ============

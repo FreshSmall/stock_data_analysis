@@ -12,7 +12,7 @@ from datetime import date
 from fastapi import APIRouter, Query
 from pydantic import BaseModel
 
-from db import (
+from data.db import (
     query_signals, query_signal_detail, query_signal_history,
 )
 from ..schemas import df_records
@@ -43,7 +43,7 @@ def scan_signals(req: ScanRequest | None = None):
 
     注意：全股池扫描约 5~10s（已批量预取优化），客户端需保持连接。
     """
-    from signal_runner import run_daily_signal
+    from orchestration.signal_runner import run_daily_signal
     sig_date = req.date if req else None
     return run_daily_signal(signal_date=sig_date, verbose=False)
 

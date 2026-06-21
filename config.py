@@ -29,10 +29,10 @@ STOCK_CODES = [
 HISTORY_DAYS = int(os.getenv("HISTORY_DAYS", "365"))
 MINUTE_PERIOD = os.getenv("MINUTE_PERIOD", "5")
 
-# ===== 定时任务（stock_data_job）=====
+# ===== 定时任务（scheduler）=====
 JOB_DAILY_CRON = os.getenv("JOB_DAILY_CRON", "30 16 * * 1-5")
 JOB_MINUTE_CRON = os.getenv("JOB_MINUTE_CRON", "30 15 * * 1-5")
-JOB_LOG_FILE = os.getenv("JOB_LOG_FILE", "stock_data_job.log")
+JOB_LOG_FILE = os.getenv("JOB_LOG_FILE", "scheduler.log")
 
 # ===== Web API =====
 API_HOST = os.getenv("API_HOST", "0.0.0.0")

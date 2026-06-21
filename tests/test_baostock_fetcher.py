@@ -2,7 +2,7 @@ from datetime import datetime, date
 
 import pytest
 
-from baostock_fetcher import _to_bs_code, _f, _parse_daily_row, _parse_minute_row
+from data.fetchers.baostock_fetcher import _to_bs_code, _f, _parse_daily_row, _parse_minute_row
 
 
 def test_to_bs_code_sh():
@@ -58,7 +58,7 @@ def test_parse_minute_row():
 def test_query_returns_none_raises(monkeypatch):
     """BaoStock query 返回 None（日期/参数错误）时应抛 RuntimeError，而非 NoneType 崩溃"""
     import baostock as bs
-    import baostock_fetcher
+    from data.fetchers import baostock_fetcher
 
     monkeypatch.setattr(bs, "login", lambda: type("R", (), {"error_code": "0"})())
     monkeypatch.setattr(bs, "query_history_k_data_plus", lambda *a, **kw: None)

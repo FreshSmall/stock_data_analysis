@@ -1,6 +1,6 @@
 import pytest
 
-import fetcher
+from data.fetchers import akshare_fetcher as fetcher
 
 
 def test_no_fallback_when_primary_ok(monkeypatch):

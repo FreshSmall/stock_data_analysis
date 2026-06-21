@@ -14,7 +14,7 @@ from __future__ import annotations
 from datetime import date
 from typing import Optional
 
-from db import upsert_rows, start_job_run, finish_job_run, get_engine
+from data.db import upsert_rows, start_job_run, finish_job_run, get_engine
 from sqlalchemy import text
 
 
@@ -32,8 +32,8 @@ def run_funnel(preset: str = "value",
 
     返回: {run_id, preset, run_date, layers, final_codes}
     """
-    from pool_screener import screen_pool, PRESETS
-    from strategy_screener import run_screener, STRATEGIES
+    from core.screeners.pool_screener import screen_pool, PRESETS
+    from core.screeners.strategy_screener import run_screener, STRATEGIES
 
     if strategies is None:
         strategies = ["trend", "breakout", "momentum"]
@@ -81,7 +81,7 @@ def run_funnel(preset: str = "value",
 
     # ===== 第 1.5 层：增量拉日线 =====
     if not skip_fetch:
-        from batch_fetch_daily import fetch_batch
+        from data.batch_fetcher import fetch_batch
         print(f"\n  📥 增量拉取日线（跳过已有）…")
         try:
             fetch_batch(codes_l1, days=365)

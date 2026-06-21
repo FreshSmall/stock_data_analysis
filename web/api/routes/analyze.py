@@ -1,7 +1,7 @@
 """分析接口"""
 from fastapi import APIRouter
 
-from analyze import calc_report
+from core.indicators.analyze import calc_report
 
 router = APIRouter(tags=["analyze"])
 

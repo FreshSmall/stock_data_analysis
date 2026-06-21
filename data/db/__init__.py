@@ -1,7 +1,7 @@
 """
 数据库模块 — 连接 / 建表 / 查询 / 写入
 
-对外统一入口，保持 ``from db import get_engine, init_db, query_daily, query_minute, upsert_rows`` 兼容。
+对外统一入口，保持 ``from data.db import get_engine, init_db, query_daily, ...`` 兼容。
 子模块按功能拆分：
   - connection: 连接管理
   - schema:     建表 DDL

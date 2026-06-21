@@ -15,8 +15,8 @@ from datetime import date, timedelta
 import pandas as pd
 import pytest
 
-import chip_engine
-from chip_engine import (
+import core.scoring.chip_engine
+from core.scoring.chip_engine import (
     _calc_one_point, compute_chip_distribution, latest_chip_summary,
     chip_signal_label, RANGE, FACTOR,
 )

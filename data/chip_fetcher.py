@@ -16,8 +16,8 @@ from typing import Optional
 
 import pandas as pd
 
-import chip_engine
-from db import query_daily, upsert_rows
+import core.scoring.chip_engine
+from data.db import query_daily, upsert_rows
 
 
 def fetch_chip(stock_code: str, days: int = 90,

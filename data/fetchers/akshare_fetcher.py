@@ -8,7 +8,7 @@ import pandas as pd
 from datetime import datetime, timedelta
 
 from config import HISTORY_DAYS, MINUTE_PERIOD
-from baostock_fetcher import fetch_daily_baostock, fetch_minute_baostock
+from data.fetchers.baostock_fetcher import fetch_daily_baostock, fetch_minute_baostock
 
 
 def fetch_stock_list() -> pd.DataFrame:

@@ -242,7 +242,7 @@ def run_pool(trade_date=None, pool_name="default",
 
     n = len(records)
     if save_db:
-        from db import upsert_rows
+        from data.db import upsert_rows
         affected = upsert_rows(records, "stock_pool",
                                ["pool_name", "trade_date", "stock_code"])
         print(f"入库 stock_pool: {affected} 条 (pool={pool_name}, date={base})")

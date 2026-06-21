@@ -21,8 +21,8 @@ from datetime import datetime
 import baostock as bs
 from sqlalchemy import text
 
-from baostock_fetcher import _to_bs_code, _DAILY_FIELDS, _parse_daily_row
-from db import get_engine, upsert_rows, start_job_run, finish_job_run
+from data.fetchers.baostock_fetcher import _to_bs_code, _DAILY_FIELDS, _parse_daily_row
+from data.db import get_engine, upsert_rows, start_job_run, finish_job_run
 
 
 def get_latest_pool_codes(limit: int = None, codes: list = None) -> list:
@@ -169,7 +169,7 @@ if __name__ == "__main__":
     # 确定拉取范围
     if from_screen:
         # 从粗筛结果取代码
-        from pool_screener import list_codes, PRESETS
+        from core.screeners.pool_screener import list_codes, PRESETS
         if from_screen not in PRESETS:
             print(f"未知粗筛预设: {from_screen}，可选: {list(PRESETS.keys())}")
             sys.exit(1)

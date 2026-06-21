@@ -1,7 +1,7 @@
 """股池查询/刷新接口"""
 from fastapi import APIRouter, Query
 
-from db import query_pool_periods, query_pool_stocks
+from data.db import query_pool_periods, query_pool_stocks
 from config import POOL_NAME
 from ..schemas import df_records
 
@@ -26,7 +26,7 @@ def get_pool_stocks(trade_date: str, pool_name: str = Query(default=None)):
 def refresh_pool(pool_name: str = Query(default=None)):
     """手动触发股池筛选入库（以今天为期次）。
     注意：同步执行全市场筛选，约 1~2 分钟，客户端需保持长连接。"""
-    from a_stock_filter import run_pool
+    from data.pool_builder import run_pool
     name = pool_name or POOL_NAME
     n = run_pool(pool_name=name)
     return {"pool_name": name, "count": n}

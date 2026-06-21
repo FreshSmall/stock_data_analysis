@@ -19,8 +19,8 @@ from typing import Optional
 import pandas as pd
 from sqlalchemy import text, bindparam
 
-from db import get_engine
-from signal_scorer import score_batch
+from data.db import get_engine
+from core.scoring.signal_scorer import score_batch
 
 
 # ============ 1. 历史扫描 ============
@@ -52,8 +52,8 @@ def backtest_signals(start_date: str, end_date: str,
 
     返回: {'days_scanned', 'signals_written', 'skipped'}
     """
-    import analyze
-    import volume_engine
+    import core.indicators.analyze
+    import core.indicators.volume_engine
 
     trading_days = _get_trading_dates(start_date, end_date)
     if not trading_days:
@@ -90,7 +90,7 @@ def backtest_signals(start_date: str, end_date: str,
 
     all_records = []
     # 预取的分钟数据：回测无分钟线，统一 None
-    from signal_scorer import score_stock
+    from core.scoring.signal_scorer import score_stock
 
     for i, dt in enumerate(sampled_days):
         dt_str = str(dt)[:10]

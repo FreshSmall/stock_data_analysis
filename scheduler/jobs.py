@@ -4,8 +4,8 @@
 import time
 import logging
 
-from fetcher import fetch_daily, fetch_minute
-from db import upsert_rows, start_job_run, finish_job_run
+from data.fetchers.akshare_fetcher import fetch_daily, fetch_minute
+from data.db import upsert_rows, start_job_run, finish_job_run
 from config import STOCK_CODES
 
 from .trading_cal import is_trading_day
@@ -52,7 +52,7 @@ def job_pool():
     """股池月度筛选入库（不判交易日：月末/月初均可跑）"""
     run_id = start_job_run("pool")
     try:
-        from a_stock_filter import run_pool
+        from data.pool_builder import run_pool
         from config import POOL_NAME
         n = run_pool(pool_name=POOL_NAME)
         finish_job_run(run_id, "ok", rows=n)
@@ -75,7 +75,7 @@ def job_signal(force: bool = False):
 
     run_id = start_job_run("signal")
     try:
-        from signal_runner import run_daily_signal
+        from orchestration.signal_runner import run_daily_signal
         result = run_daily_signal(verbose=False)
         finish_job_run(run_id, "ok", rows=result["scored"])
         logger.info("signal 完成: 共 %d, 评分 %d, 跳过 %d",
@@ -98,7 +98,7 @@ def job_funnel(force: bool = False):
 
     run_id = start_job_run("funnel")
     try:
-        from funnel_runner import run_funnel
+        from orchestration.funnel_runner import run_funnel
         from config import FUNNEL_PRESET, FUNNEL_STRATEGIES
         strategies = FUNNEL_STRATEGIES.split(",")
         result = run_funnel(preset=FUNNEL_PRESET, strategies=strategies)

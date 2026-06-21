@@ -3,7 +3,7 @@
 """
 import pandas as pd
 
-from db import query_daily
+from data.db import query_daily
 
 
 # ==================== 技术指标 ====================
@@ -125,7 +125,7 @@ def print_report(stock_code: str):
 
 
 def calc_report(stock_code: str) -> dict:
-    """返回结构化分析数据（供 web_api 使用）"""
+    """返回结构化分析数据（供 web/api 使用）"""
     df = query_daily(stock_code)
     if df.empty:
         return {"stock_code": stock_code, "error": "无数据"}

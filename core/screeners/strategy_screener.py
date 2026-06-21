@@ -16,9 +16,9 @@ from typing import Optional
 
 import pandas as pd
 
-import analyze
-import volume_engine
-from db import query_daily
+import core.indicators.analyze
+import core.indicators.volume_engine
+from data.db import query_daily
 
 
 # ============ 策略 1：趋势跟踪 ============
@@ -281,7 +281,7 @@ def _fetch_stock_names(stock_codes: list) -> dict:
     """批量从股池表取股票名称，返回 {code: name}。"""
     if not stock_codes:
         return {}
-    from db import get_engine
+    from data.db import get_engine
     from sqlalchemy import text
     from pandas import read_sql
     engine = get_engine()
@@ -320,7 +320,7 @@ def run_screener(strategy: str, stock_codes: list,
     strategy_name, screen_fn = STRATEGIES[strategy]
 
     # 批量预取日线数据（复用 signal_scorer 的批量预取逻辑）
-    from signal_scorer import _bulk_fetch_daily
+    from core.scoring.signal_scorer import _bulk_fetch_daily
     daily_map = _bulk_fetch_daily(stock_codes)
 
     # 批量取股票名称（从股池表）

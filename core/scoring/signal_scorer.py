@@ -15,13 +15,13 @@ from typing import Optional
 import pandas as pd
 from sqlalchemy import text
 
-import analyze
-import volume_engine
+import core.indicators.analyze
+import core.indicators.volume_engine
 from config import (
     SIGNAL_MIN_SCORE, SIGNAL_W_VOL_PRICE, SIGNAL_W_TREND,
     SIGNAL_W_MOMENTUM, SIGNAL_W_ANOMALY, SIGNAL_W_INTRADAY,
 )
-from db import query_daily, query_minute, query_chip_latest, get_engine
+from data.db import query_daily, query_minute, query_chip_latest, get_engine
 
 
 # 涨跌停判定阈值（pct_change%）
@@ -306,7 +306,7 @@ def _score_chip(chip: Optional[dict]) -> tuple:
     if profit is None or conc is None:
         return 0.0, ""
 
-    import chip_engine
+    import core.scoring.chip_engine
     avg_cost = chip.get("avg_cost") or 0
     close = chip.get("_close") or avg_cost or 0
     label, _ = chip_engine.chip_signal_label(profit, conc, avg_cost, close)
@@ -505,7 +505,7 @@ def score_stock(stock_code: str, signal_date: Optional[date] = None,
     chip = query_chip_latest(stock_code)
     if chip is None:
         try:
-            import chip_engine
+            import core.scoring.chip_engine
             chip = chip_engine.latest_chip_summary(df)
         except Exception:
             chip = None

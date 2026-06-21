@@ -6,7 +6,7 @@
 """
 from fastapi import APIRouter, Query
 
-from db import get_engine
+from data.db import get_engine
 from sqlalchemy import text
 
 router = APIRouter(tags=["strategy"])
@@ -15,7 +15,7 @@ router = APIRouter(tags=["strategy"])
 @router.get("/strategies")
 def list_strategies():
     """支持的策略列表"""
-    from strategy_screener import STRATEGIES
+    from core.screeners.strategy_screener import STRATEGIES
     return [
         {"key": k, "name": v[0], "desc": _STRATEGY_DESC.get(k, "")}
         for k, v in STRATEGIES.items()
@@ -39,7 +39,7 @@ def run_strategy_screen(
 
     自动从 daily_prices 取有数据的股票进行筛选。
     """
-    from strategy_screener import run_screener, STRATEGIES
+    from core.screeners.strategy_screener import run_screener, STRATEGIES
 
     if name not in STRATEGIES:
         from fastapi import HTTPException

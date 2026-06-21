@@ -8,7 +8,7 @@
 from fastapi import APIRouter, Query
 from pydantic import BaseModel
 
-from db import query_chip_distribution, query_chip_latest
+from data.db import query_chip_distribution, query_chip_latest
 from ..schemas import df_records
 
 router = APIRouter(tags=["chips"])
@@ -57,7 +57,7 @@ class RefreshRequest(BaseModel):
 @router.post("/stocks/{stock_code}/chip/refresh")
 def refresh_chip(stock_code: str, req: RefreshRequest | None = None):
     """计算并入库该股票近 N 天筹码数据（本地 CYQ 算法）。"""
-    from chip_fetcher import upsert_chip
+    from data.chip_fetcher import upsert_chip
     days = req.days if req else 90
     n = upsert_chip(stock_code, days=days)
     return {"stock_code": stock_code, "rows": n, "days": days}
