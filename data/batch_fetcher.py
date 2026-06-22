@@ -97,16 +97,21 @@ def _fetch_one_process(args):
     """进程级独立拉取单只股票并入库（多进程 worker 函数）。
 
     每个进程独立 login/logout，带重试，成功后直接 upsert 入库。
+    支持增量：传入 last_date 则只拉该日期之后的数据。
     返回 (code, rows_count, error)。
     """
-    code, days = args
+    code, days, last_date = args
     import baostock as _bs
     from data.fetchers.baostock_fetcher import _to_bs_code, _DAILY_FIELDS, _parse_daily_row
     from data.db import upsert_rows as _upsert
     from datetime import datetime, timedelta
 
     end = datetime.now().strftime("%Y-%m-%d")
-    start = (datetime.now() - timedelta(days=days)).strftime("%Y-%m-%d")
+    # 增量：已有数据则从最后交易日次日开始拉，否则拉全量
+    if last_date:
+        start = last_date
+    else:
+        start = (datetime.now() - timedelta(days=days)).strftime("%Y-%m-%d")
 
     for attempt in range(3):
         _bs.login()
@@ -155,24 +160,57 @@ def fetch_batch(codes: list, days: int = 365, workers: int = 0):
     today = datetime.now().strftime("%Y-%m-%d")
     start_full = (datetime.now() - timedelta(days=days)).strftime("%Y-%m-%d")
 
-    # 增量判断
+    # 增量判断：已有最新交易日数据的跳过，其余需要拉取
+    # 最新交易日从 BaoStock 查上证指数（保证准确性），而非库里的 MAX
+    from data.db import get_engine as _ge
+    from sqlalchemy import text as _text
+    _e = _ge()
+
+    # 查 BaoStock 最新交易日
+    import baostock as _bs
+    _bs.login()
+    _rs = _bs.query_history_k_data_plus(
+        "sh.000001", "date", start_date=today, end_date=today,
+        frequency="d", adjustflag="3")
+    if _rs and _rs.next():
+        latest_str = _rs.get_row_data()[0]
+    else:
+        # 今天没数据，往前查最近 5 天
+        _rs2 = _bs.query_history_k_data_plus(
+            "sh.000001", "date",
+            start_date=(datetime.now() - timedelta(days=7)).strftime("%Y-%m-%d"),
+            end_date=today, frequency="d", adjustflag="3")
+        _dates = []
+        while _rs2.next():
+            _dates.append(_rs2.get_row_data()[0])
+        latest_str = _dates[-1] if _dates else None
+    _bs.logout()
+
+    if not latest_str:
+        # BaoStock 查不到，退回用库里 MAX
+        with _e.connect() as _c:
+            _db_latest = _c.execute(_text("SELECT MAX(trade_date) FROM daily_prices")).scalar()
+        latest_str = str(_db_latest)[:10] if _db_latest else None
+
     existing = get_existing_latest_dates(codes)
     todo = []
     skipped = 0
     for code in codes:
         last = existing.get(code)
-        if last:
-            skipped += 1
+        if last and latest_str and last >= latest_str:
+            skipped += 1  # 已有最新交易日数据
         else:
-            todo.append(code)
-    print(f"  总计 {len(codes)} 只 | 跳过(已有) {skipped} 只 | 待拉取 {len(todo)} 只\n")
+            todo.append(code)  # 无数据 或 数据不是最新
+    print(f"  总计 {len(codes)} 只 | 跳过(最新) {skipped} 只 | 待拉取 {len(todo)} 只")
+    if latest_str:
+        print(f"  最新交易日: {latest_str}\n")
 
     if not todo:
         print("  ✅ 全部股票已有数据，无需拉取\n")
         return 0, 0
 
     if workers > 0:
-        return _fetch_batch_parallel(todo, days, workers)
+        return _fetch_batch_parallel(todo, days, workers, existing)
     else:
         return _fetch_batch_serial(todo, start_full, today)
 
@@ -230,10 +268,9 @@ def _fetch_batch_serial(todo, start_full, today):
     return total_rows, len(errors)
 
 
-def _fetch_batch_parallel(todo, days, workers):
+def _fetch_batch_parallel(todo, days, workers, existing_dates=None):
     """多进程并发模式：每个进程独立 login（适合大批量，~4x 加速）"""
     from concurrent.futures import ProcessPoolExecutor, as_completed
-    from data.fetchers.baostock_fetcher import _parse_daily_row
 
     run_id = start_job_run("job_batch_fetch_daily")
     total_rows = 0
@@ -244,8 +281,10 @@ def _fetch_batch_parallel(todo, days, workers):
 
     try:
         with ProcessPoolExecutor(max_workers=workers) as pool:
-            futures = {pool.submit(_fetch_one_process, (code, days)): code
-                       for code in todo}
+            futures = {
+                pool.submit(_fetch_one_process, (code, days, existing_dates.get(code) if existing_dates else None)): code
+                for code in todo
+            }
             for future in as_completed(futures):
                 code = futures[future]
                 done += 1

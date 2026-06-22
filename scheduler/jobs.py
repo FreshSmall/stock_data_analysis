@@ -37,9 +37,55 @@ def _run(job_name, fetch_fn, table, conflict_cols):
 
 
 def job_fetch_daily():
-    """拉取全股票池日线"""
-    _run("job_fetch_daily", fetch_daily, "daily_prices",
-         ["stock_code", "trade_date"])
+    """拉取全股票池日线（增量：从 DB 最大日期到今天收盘）
+
+    流程:
+      1. 从 stock_pool 最新期次取全部股票代码
+      2. 用 batch_fetcher 增量拉取（已有最新交易日的跳过，其余只拉缺失的部分）
+      3. 多进程并发（默认 3 进程，BaoStock 安全上限）
+    """
+    if not is_trading_day():
+        logger.info("fetch_daily: 非交易日，跳过")
+        return
+
+    # BaoStock 健康检查：login 失败说明 IP 被封，跳过本次避免反复撞击
+    import baostock as _bs
+    _bs.login()
+    _lg = _bs.login()  # 双重确认
+    if _lg.error_code != "0":
+        logger.warning("fetch_daily: BaoStock 不可用(%s %s)，跳过本次",
+                       _lg.error_code, _lg.error_msg)
+        _bs.logout()
+        return
+    _bs.logout()
+
+    run_id = start_job_run("job_fetch_daily")
+    try:
+        from data.batch_fetcher import fetch_batch
+        from data.db import get_engine
+        from sqlalchemy import text as _text
+
+        # 从 stock_pool 最新期次取全部股票代码
+        engine = get_engine()
+        with engine.connect() as conn:
+            rows = conn.execute(_text("""
+                SELECT DISTINCT stock_code FROM stock_pool
+                WHERE trade_date = (SELECT MAX(trade_date) FROM stock_pool)
+                ORDER BY stock_code
+            """)).fetchall()
+        codes = [r[0] for r in rows]
+        logger.info("fetch_daily: 股池 %d 只，开始增量拉取", len(codes))
+
+        # 增量拉取（3 进程，BaoStock 安全并发上限）
+        total_rows, n_errors = fetch_batch(codes, days=365, workers=3)
+        finish_job_run(run_id, "ok" if n_errors == 0 else "partial",
+                       rows=total_rows,
+                       error=f"{n_errors} 个错误" if n_errors else None)
+        logger.info("fetch_daily 完成: %d 条, %d 错误", total_rows, n_errors)
+    except Exception as e:
+        finish_job_run(run_id, "failed", error=str(e))
+        logger.exception("fetch_daily 失败")
+        raise
 
 
 def job_fetch_minute():

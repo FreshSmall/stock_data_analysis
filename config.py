@@ -30,8 +30,8 @@ HISTORY_DAYS = int(os.getenv("HISTORY_DAYS", "365"))
 MINUTE_PERIOD = os.getenv("MINUTE_PERIOD", "5")
 
 # ===== 定时任务（scheduler）=====
-JOB_DAILY_CRON = os.getenv("JOB_DAILY_CRON", "30 16 * * 1-5")
-JOB_MINUTE_CRON = os.getenv("JOB_MINUTE_CRON", "30 15 * * 1-5")
+JOB_DAILY_CRON = os.getenv("JOB_DAILY_CRON", "30 16 * * 1-5")    # 工作日16:30 全股池增量日线
+JOB_MINUTE_CRON = os.getenv("JOB_MINUTE_CRON", "30 15 * * 1-5")  # 工作日15:30 分钟线
 JOB_LOG_FILE = os.getenv("JOB_LOG_FILE", "scheduler.log")
 
 # ===== Web API =====
@@ -46,7 +46,7 @@ POOL_MIN_CIRC_MV = float(os.getenv("POOL_MIN_CIRC_MV", "15"))          # 流通�
 POOL_MIN_LISTING_DAYS = int(os.getenv("POOL_MIN_LISTING_DAYS", "365")) # 252交易日≈365天
 
 # ===== 信号系统（signal）=====
-SIGNAL_CRON = os.getenv("SIGNAL_CRON", "0 17 * * 1-5")         # 盘后扫描(工作日17:00)
+SIGNAL_CRON = os.getenv("SIGNAL_CRON", "30 17 * * 1-5")         # 盘后扫描(工作日17:30)
 SIGNAL_MIN_SCORE = float(os.getenv("SIGNAL_MIN_SCORE", "0"))   # 最低入库评分(0=全量)
 SIGNAL_BATCH_SIZE = int(os.getenv("SIGNAL_BATCH_SIZE", "50"))  # 并发/分批大小
 SIGNAL_TOP_N = int(os.getenv("SIGNAL_TOP_N", "100"))           # 前端默认展示数
