@@ -109,3 +109,23 @@ def job_funnel(force: bool = False):
         finish_job_run(run_id, "failed", error=str(e))
         logger.exception("funnel 失败")
         raise
+
+
+def job_recommend(force: bool = False):
+    """每日投资推荐：粗筛 → 4维评分 → 入库 recommend_result"""
+    if not force and not is_trading_day():
+        logger.info("recommend: 非交易日，跳过")
+        return
+
+    run_id = start_job_run("recommend")
+    try:
+        from orchestration.recommend_runner import run_recommend
+        from config import RECOMMEND_PRESET
+        result = run_recommend(preset=RECOMMEND_PRESET)
+        finish_job_run(run_id, "ok", rows=result["count"])
+        logger.info("recommend 完成: run_id=%s, 强烈推荐 %d, 值得关注 %d",
+                    result["run_id"], result["strong"], result["watch"])
+    except Exception as e:
+        finish_job_run(run_id, "failed", error=str(e))
+        logger.exception("recommend 失败")
+        raise

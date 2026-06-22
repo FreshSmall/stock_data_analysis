@@ -15,6 +15,7 @@ from .query import (
     query_signals, query_signal_detail, query_signal_history,
     query_chip_distribution, query_chip_latest,
     query_funnel_runs, query_funnel_overview, query_screen_results,
+    query_recommend, query_recommend_runs,
     get_last_trade_dates,
 )
 from .writer import upsert_rows, start_job_run, finish_job_run
@@ -25,6 +26,7 @@ __all__ = [
     "query_signals", "query_signal_detail", "query_signal_history",
     "query_chip_distribution", "query_chip_latest",
     "query_funnel_runs", "query_funnel_overview", "query_screen_results",
+    "query_recommend", "query_recommend_runs",
     "get_last_trade_dates",
     "upsert_rows", "start_job_run", "finish_job_run",
 ]

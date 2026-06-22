@@ -576,10 +576,10 @@ th .help-icon { width: 14px; height: 14px; font-size: 10px; }
 }
 
 /* ===== 漏斗筛选页 ===== */
-.funnel-panel { padding: 14px 18px; overflow-y: auto; height: 100%; }
+.funnel-panel { padding: 12px 16px; overflow-y: auto; flex: 1; min-width: 0; }
 .funnel-toolbar {
-  display: flex; align-items: center; gap: 14px; flex-wrap: wrap;
-  margin-bottom: 16px;
+  display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
+  margin-bottom: 12px;
 }
 .funnel-toolbar select { background: #1e1e1e; color: #ddd; border: 1px solid #444;
   border-radius: 3px; padding: 3px 6px; font-size: 12.5px; }
@@ -587,16 +587,28 @@ th .help-icon { width: 14px; height: 14px; font-size: 10px; }
 .funnel-run-btn { padding: 4px 12px; background: #2d4a2d !important; color: #8c8 !important;
   border: 1px solid #3d6a3d; border-radius: 3px; cursor: pointer; font-size: 12.5px; }
 .funnel-run-btn:hover:not(:disabled) { background: #3d6a3d !important; }
-.funnel-section { margin-bottom: 18px; }
-.funnel-section h4 { color: #ddd; margin-bottom: 8px; font-size: 14px; }
-.funnel-chart-box { height: 260px; background: #181818; border-radius: 4px; padding: 6px; }
 
-/* 层级切换按钮组 */
-.funnel-layer-tabs { display: flex; gap: 8px; flex-wrap: wrap; }
+/* 左右分栏主布局 */
+.funnel-body { display: flex; gap: 14px; height: calc(100% - 52px); }
+.funnel-left {
+  flex: 0 0 300px; display: flex; flex-direction: column; gap: 12px;
+  overflow-y: auto;
+}
+.funnel-right {
+  flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 12px;
+  overflow-y: auto;
+}
+
+.funnel-section { margin-bottom: 0; }
+.funnel-section h4 { color: #ddd; margin-bottom: 6px; font-size: 13px; }
+.funnel-chart-box { height: 180px; background: #181818; border-radius: 4px; padding: 4px; }
+
+/* 层级切换按钮组（左侧纵向） */
+.funnel-layer-tabs { display: flex; flex-direction: column; gap: 6px; }
 .funnel-layer-btn {
-  padding: 5px 12px; background: #2a2a2b; color: #aaa;
+  padding: 6px 10px; background: #2a2a2b; color: #aaa;
   border: 1px solid #444; border-radius: 3px; cursor: pointer;
-  font-size: 12.5px;
+  font-size: 12.5px; text-align: left;
 }
 .funnel-layer-btn:hover { background: #333; color: #ddd; }
 .funnel-layer-btn.active { background: #1a3a5a; color: #4fc3f7; border-color: #4fc3f7; }
@@ -609,21 +621,26 @@ th .help-icon { width: 14px; height: 14px; font-size: 10px; }
 .funnel-table .score-cell { color: #f5a623; font-weight: 600; text-align: right; }
 .funnel-table .reason-cell { color: #888; font-size: 11px; max-width: 280px; }
 
-/* 执行历史 */
+/* 执行历史（左侧底部） */
 .funnel-history-row {
-  display: flex; align-items: center; gap: 12px;
-  padding: 6px 10px; border-radius: 3px; cursor: pointer;
-  font-size: 12.5px; border-left: 3px solid transparent;
+  display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+  padding: 5px 8px; border-radius: 3px; cursor: pointer;
+  font-size: 12px; border-left: 3px solid transparent;
 }
 .funnel-history-row:hover { background: #2a2a2b; }
 .funnel-history-row.active { background: #1a2a3a; border-left-color: #4fc3f7; }
-.funnel-history-date { color: #4fc3f7; font-weight: 600; min-width: 90px; }
-.funnel-history-preset { color: #ddd; min-width: 70px; }
-.funnel-history-layers { color: #888; }
+.funnel-history-date { color: #4fc3f7; font-weight: 600; min-width: 78px; }
+.funnel-history-preset { color: #ddd; min-width: 50px; }
+.funnel-history-layers { color: #888; font-size: 11px; }
 .funnel-history-item { display: inline-block; }
 
 .funnel-empty { text-align: center; padding: 40px 0; }
 .funnel-empty .signal-hint { margin-bottom: 8px; }
+
+@media (max-width: 900px) {
+  .funnel-body { flex-direction: column; }
+  .funnel-left { flex: 0 0 auto; }
+}
 
 /* 概览卡内的股票详情（紧凑纵向） */
 .stock-info-card {
@@ -639,6 +656,28 @@ th .help-icon { width: 14px; height: 14px; font-size: 10px; }
 }
 .stock-info-card .info-name { font-size: 15px; }
 .stock-info-card:empty { display: none; }   /* 无数据时不占位 */
+
+/* ===== 投资推荐页 ===== */
+.rec-summary { color: #888; font-size: 13px; }
+.rec-summary b { color: #ddd; }
+
+/* 推荐标签 */
+.rec-label { display: inline-block; padding: 2px 8px; border-radius: 3px; font-size: 11px; font-weight: 600; }
+.rec-label.rec-strong { background: #2d5a2d; color: #6fdc6f; }
+.rec-label.rec-watch { background: #1a3a5a; color: #4fc3f7; }
+.rec-label.rec-observe { background: #3a3a3a; color: #aaa; }
+.rec-label.rec-skip { background: #5a2d2d; color: #ff7a72; }
+
+/* 推荐分列 */
+.recommend-table .rec-total-score {
+  color: #f5a623; font-weight: 700; font-size: 14px; text-align: center;
+}
+.recommend-table .rec-dim-score { color: #888; text-align: center; font-size: 12px; }
+.recommend-table .reason-cell { color: #999; font-size: 11px; max-width: 300px; }
+
+/* 历史里的标签 */
+.funnel-history-layers .rec-strong { color: #6fdc6f; margin-right: 6px; }
+.funnel-history-layers .rec-watch { color: #4fc3f7; }
 
 /* ===== 筹码分布 section ===== */
 .market-chip-wrap {

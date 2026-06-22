@@ -15,8 +15,7 @@ from typing import Optional
 import pandas as pd
 from sqlalchemy import text
 
-import core.indicators.analyze
-import core.indicators.volume_engine
+from core.indicators import analyze, volume_engine
 from config import (
     SIGNAL_MIN_SCORE, SIGNAL_W_VOL_PRICE, SIGNAL_W_TREND,
     SIGNAL_W_MOMENTUM, SIGNAL_W_ANOMALY, SIGNAL_W_INTRADAY,

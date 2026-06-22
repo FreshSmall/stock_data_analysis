@@ -96,19 +96,25 @@ function renderShell() {
         <button id="funnelRunBtn" class="funnel-run-btn">▶ 执行新漏斗</button>
       </div>
     </div>
-    <div class="funnel-section">
-      <h4>📊 漏斗总览</h4>
-      <div id="funnelChart" class="funnel-chart-box"></div>
-    </div>
-    <div class="funnel-section">
-      <div id="funnelLayers" class="funnel-layer-tabs"></div>
-    </div>
-    <div class="funnel-section">
-      <div id="funnelResults"></div>
-    </div>
-    <div class="funnel-section">
-      <h4>📅 执行历史</h4>
-      <div id="funnelHistory"></div>
+    <div class="funnel-body">
+      <div class="funnel-left">
+        <div class="funnel-section">
+          <h4>📊 漏斗总览</h4>
+          <div id="funnelChart" class="funnel-chart-box"></div>
+        </div>
+        <div class="funnel-section">
+          <div id="funnelLayers" class="funnel-layer-tabs"></div>
+        </div>
+        <div class="funnel-section">
+          <h4>📅 执行历史</h4>
+          <div id="funnelHistory"></div>
+        </div>
+      </div>
+      <div class="funnel-right">
+        <div class="funnel-section" style="flex:1; min-height:0; overflow-y:auto;">
+          <div id="funnelResults"></div>
+        </div>
+      </div>
     </div>
   `;
 

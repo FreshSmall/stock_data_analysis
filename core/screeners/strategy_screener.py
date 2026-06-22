@@ -16,8 +16,7 @@ from typing import Optional
 
 import pandas as pd
 
-import core.indicators.analyze
-import core.indicators.volume_engine
+from core.indicators import analyze, volume_engine
 from data.db import query_daily
 
 

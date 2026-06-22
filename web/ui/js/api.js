@@ -159,3 +159,23 @@ export async function triggerFunnel(preset = 'value', strategies = null, skipFet
   if (!res.ok) throw new Error(`HTTP ${res.status} ${res.statusText}`);
   return res.json();
 }
+
+/* ===== 投资推荐 ===== */
+
+export function fetchRecommend(sort = 'recommend') {
+  return getJSON(`/recommend/latest?sort=${sort}`);
+}
+
+export function fetchRecommendRuns() {
+  return getJSON('/recommend/runs');
+}
+
+export async function triggerRecommend(preset = 'value', skipFetch = false) {
+  const res = await fetch(`${BASE}/recommend/run`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ preset, skip_fetch: skipFetch }),
+  });
+  if (!res.ok) throw new Error(`HTTP ${res.status} ${res.statusText}`);
+  return res.json();
+}

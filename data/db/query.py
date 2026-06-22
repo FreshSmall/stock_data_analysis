@@ -233,6 +233,44 @@ def query_screen_results(run_id: str, layer: int = None,
     return df
 
 
+# ============ 投资推荐结果 ============
+
+def query_recommend(sort: str = "recommend") -> pd.DataFrame:
+    """查询最新一批推荐结果，按指定维度排序。
+
+    sort: recommend/value/technical/chip
+    """
+    col_map = {
+        "recommend": "recommend_score",
+        "value": "value_score",
+        "technical": "technical_score",
+        "chip": "chip_score",
+    }
+    sort_col = col_map.get(sort, "recommend_score")
+    engine = get_engine()
+    df = pd.read_sql(text(f"""
+        SELECT * FROM recommend_result
+        WHERE run_id = (SELECT MAX(run_id) FROM recommend_result)
+        ORDER BY {sort_col} DESC
+    """), engine)
+    return df
+
+
+def query_recommend_runs(limit: int = 20) -> pd.DataFrame:
+    """推荐执行历史批次"""
+    engine = get_engine()
+    df = pd.read_sql(text("""
+        SELECT run_id, run_date,
+               COUNT(*) as total,
+               SUM(CASE WHEN label='强烈推荐' THEN 1 ELSE 0 END) as strong,
+               SUM(CASE WHEN label='值得关注' THEN 1 ELSE 0 END) as watch
+        FROM recommend_result
+        GROUP BY run_id, run_date
+        ORDER BY run_date DESC LIMIT :lim
+    """), engine, params={"lim": limit})
+    return df
+
+
 def get_last_trade_dates(stock_codes: list) -> dict:
     """批量查询多只股票的最后交易日，返回 {stock_code: 'YYYY-MM-DD'}。
     无数据的股票不在返回结果中（用于增量拉取判断起点）。"""

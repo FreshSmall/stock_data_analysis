@@ -56,6 +56,10 @@ FUNNEL_CRON = os.getenv("FUNNEL_CRON", "0 9 * * 1")              # 每周一09:0
 FUNNEL_PRESET = os.getenv("FUNNEL_PRESET", "value")              # 默认粗筛预设
 FUNNEL_STRATEGIES = os.getenv("FUNNEL_STRATEGIES", "trend,breakout,momentum")  # 精筛策略
 
+# ===== 投资推荐（recommend）=====
+RECOMMEND_CRON = os.getenv("RECOMMEND_CRON", "0 9 * * 1-5")       # 工作日09:00
+RECOMMEND_PRESET = os.getenv("RECOMMEND_PRESET", "value")         # 默认粗筛预设
+
 # 评分权重(和为1.0)
 SIGNAL_W_VOL_PRICE = float(os.getenv("SIGNAL_W_VOL_PRICE", "0.30"))   # 量价配合
 SIGNAL_W_TREND = float(os.getenv("SIGNAL_W_TREND", "0.25"))           # 趋势方向

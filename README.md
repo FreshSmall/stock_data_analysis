@@ -85,7 +85,7 @@ stock_data_analysis/
 │   │   ├── akshare_fetcher.py  # akshare 主源（增量拉取 + 主备切换）
 │   │   └── baostock_fetcher.py # baostock 备源
 │   ├── pool_builder.py        # 股池构建（新浪行情 + 东财上市日期/行业）
-│   ├── batch_fetcher.py       # 批量拉日线（BaoStock 连接复用 + 增量 + 粗筛联动）
+│   ├── batch_fetcher.py       # 批量拉日线（多进程并发 + 增量 + 粗筛联动）
 │   ├── chip_fetcher.py        # 筹码数据入库
 │   └── db/                    # 数据库层
 │       ├── connection.py        # 连接管理
@@ -236,9 +236,20 @@ python main.py screen_pool --custom "total_mv>500,pe<20,turnover>1"  # 自定义
 只对粗筛出的候选股拉日线（而非全市场），大幅减少网络开销：
 
 ```bash
-python batch_fetch_daily.py --from-screen value     # 仅拉价值蓝筹的日线
-python batch_fetch_daily.py --from-screen growth --top 200
+# 串行（小批量，100% 成功率）
+python -m data.batch_fetcher --from-screen value
+
+# 3 进程并发（推荐，~3-4x 加速）
+python -m data.batch_fetcher --from-screen value --workers 3
+
+# 全股池并发拉取
+python -m data.batch_fetcher --workers 3
+
+# 4 进程（最快，但 BaoStock 高并发可能 ~15% 失败，失败的再串行补跑即可）
+python -m data.batch_fetcher --workers 4
 ```
+
+**并发拉取原理**：BaoStock 不是线程安全的，采用多进程（ProcessPoolExecutor）——每个进程独立 login/logout + 3 次重试 + 子进程直接入库。3533 只全量拉取：串行 ~78 分钟，3 进程 ~30 分钟。
 
 #### 第 2 层：技术指标精筛（`strategy_screener.py`，见下方第 6 节）
 

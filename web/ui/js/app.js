@@ -7,6 +7,7 @@ import { fmtPrice, fmtPct, fmtTime } from './format.js';
 import { loadPools } from './pools.js';
 import { loadSignals } from './signals.js';
 import { loadFunnel } from './funnel.js';
+import { loadRecommend } from './recommend.js';
 import { decorateStatic, initTooltipEvents } from './glossary.js';
 import { renderChipSection, renderChipPlaceholder } from './chips.js';
 
@@ -359,6 +360,7 @@ async function init() {
       if (name === 'pools') loadPools();
       if (name === 'signals') loadSignals();
       if (name === 'funnel') loadFunnel();
+      if (name === 'recommend') loadRecommend();
     });
   });
 

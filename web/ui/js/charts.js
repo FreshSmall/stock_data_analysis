@@ -108,10 +108,10 @@ function buildOption(daily) {
     },
     axisPointer: { link: [{ xAxisIndex: 'all' }] },
     grid: [
-      { left: '7%', right: '3%', top: '8%',  height: '46%' }, // 主图
-      { left: '7%', right: '3%', top: '58%', height: '9%'  }, // 成交量
-      { left: '7%', right: '3%', top: '70%', height: '9%'  }, // RSI
-      { left: '7%', right: '3%', top: '82%', height: '10%' }, // MACD
+      { left: '7%', right: '3%', top: '8%',  height: '42%' }, // 主图
+      { left: '7%', right: '3%', top: '54%', height: '9%'  }, // 成交量
+      { left: '7%', right: '3%', top: '66%', height: '9%'  }, // RSI
+      { left: '7%', right: '3%', top: '78%', height: '9%'  }, // MACD（缩小留出日期空间）
     ],
     xAxis: [
       { ...baseX, gridIndex: 0, axisLabel: { show: false } },
@@ -127,8 +127,8 @@ function buildOption(daily) {
     ],
     dataZoom: [
       { type: 'inside', xAxisIndex: [0, 1, 2, 3], start, end: 100 },
-      { type: 'slider', xAxisIndex: [0, 1, 2, 3], top: '94%', height: '4%',
-        start, end: 100, textStyle: { color: '#888' } },
+      { type: 'slider', xAxisIndex: [0, 1, 2, 3], bottom: 4, height: 16,
+        start, end: 100, textStyle: { color: '#888', fontSize: 10 } },
     ],
     series: [
       { name: '日K', type: 'candlestick', data: ohlc, xAxisIndex: 0, yAxisIndex: 0,

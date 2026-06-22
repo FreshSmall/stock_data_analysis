@@ -241,6 +241,39 @@ def init_db():
         except Exception:
             pass  # 列已存在
 
+        conn.execute(text("""
+            CREATE TABLE IF NOT EXISTS recommend_result (
+                id                BIGINT AUTO_INCREMENT PRIMARY KEY,
+                run_id            VARCHAR(40)  NOT NULL COMMENT '批次ID(日期+预设)',
+                run_date          DATE         NOT NULL,
+                stock_code        VARCHAR(10)  NOT NULL,
+                stock_name        VARCHAR(50),
+                exchange          VARCHAR(10),
+                value_score       DECIMAL(5,2) COMMENT '价值分0-100',
+                technical_score   DECIMAL(5,2) COMMENT '技术分0-100',
+                chip_score        DECIMAL(5,2) COMMENT '筹码分0-100',
+                recommend_score   DECIMAL(5,2) COMMENT '综合推荐分0-100',
+                label             VARCHAR(20)  COMMENT '强烈推荐/值得关注/观察/暂不建议',
+                reasons           TEXT         COMMENT '推荐理由JSON数组',
+                total_mv          DECIMAL(14,2),
+                pe                DECIMAL(12,3),
+                pb                DECIMAL(12,3),
+                pct_change        DECIMAL(8,4),
+                turnover          DECIMAL(10,4),
+                industry          VARCHAR(50),
+                ma20_trend        VARCHAR(10)  COMMENT '上行/下行/持平',
+                macd_signal       VARCHAR(20),
+                rsi_value         DECIMAL(6,2),
+                vol_ratio         DECIMAL(8,4),
+                chip_profit_ratio DECIMAL(8,6),
+                chip_concentration DECIMAL(8,4),
+                created_at        DATETIME     DEFAULT CURRENT_TIMESTAMP,
+                UNIQUE KEY uk_run_code (run_id, stock_code),
+                INDEX idx_run_date (run_date),
+                INDEX idx_label (label)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='投资推荐结果(4维评分)'
+        """))
+
         conn.commit()
     print("✅ 数据库初始化完成: daily_prices, minute_prices, stocks, job_runs, stock_pool, "
-          "stock_signal, stock_signal_log, chip_distribution, screen_result")
+          "stock_signal, stock_signal_log, chip_distribution, screen_result, recommend_result")

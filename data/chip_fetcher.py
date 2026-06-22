@@ -16,7 +16,7 @@ from typing import Optional
 
 import pandas as pd
 
-import core.scoring.chip_engine
+from core.scoring import chip_engine
 from data.db import query_daily, upsert_rows
 
 

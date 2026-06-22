@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>股票数据看板</title>
-  <link rel="stylesheet" href="/css/main.css?v=17">
+  <link rel="stylesheet" href="/css/main.css?v=19">
 </head>
 <body>
   <header class="topbar">
@@ -14,6 +14,7 @@
       <button class="tab" data-tab="pools">股池</button>
       <button class="tab" data-tab="signals">✨ 信号</button>
       <button class="tab" data-tab="funnel">🎯 漏斗</button>
+      <button class="tab" data-tab="recommend">💡 推荐</button>
     </nav>
     <div class="controls">
       <button id="refreshBtn">刷新</button>
@@ -233,6 +234,11 @@
     <!-- 漏斗筛选页 -->
     <section id="tab-funnel" class="tab-panel hidden">
       <div id="funnelPanel" class="funnel-panel"></div>
+    </section>
+
+    <!-- 投资推荐页 -->
+    <section id="tab-recommend" class="tab-panel hidden">
+      <div id="recommendPanel" class="funnel-panel"></div>
     </section>
   </main>
 

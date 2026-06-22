@@ -323,6 +323,24 @@ def do_funnel(args=None):
     run_funnel(preset=preset, strategies=strategies)
 
 
+def do_recommend(args=None):
+    """投资推荐：粗筛 → 4维评分 → 入库
+
+    用法:
+      python main.py recommend              # 默认 value 预设
+      python main.py recommend growth       # 指定预设
+    """
+    args = args or []
+    from orchestration.recommend_runner import run_recommend
+    from core.screeners.pool_screener import PRESETS
+
+    preset = args[0] if args and not args[0].startswith("-") else "value"
+    if preset not in PRESETS:
+        print(f"未知预设: {preset}，可选: {list(PRESETS.keys())}")
+        return
+    run_recommend(preset=preset)
+
+
 COMMANDS = {
     "init":             ("初始化数据库",            do_init),
     "fetch_daily":      ("拉取日线数据",            do_fetch_daily),
@@ -332,6 +350,7 @@ COMMANDS = {
     "pool":             ("股池筛选并入库",          do_pool),
     "screen_pool":      ("股池基础粗筛(市值/PE/换手等)", do_screen_pool),
     "funnel":           ("漏斗筛选(粗筛→精筛→入库)", do_funnel),
+    "recommend":        ("投资推荐(4维评分→排行榜)", do_recommend),
     "fetch_chip":       ("计算并入库筹码分布(本地CYQ算法)", do_fetch_chip),
     "signal":           ("扫描股池信号并评分入库",   do_signal),
     "backtest":         ("回测: 历史扫描+收益回填+报告", do_backtest),
